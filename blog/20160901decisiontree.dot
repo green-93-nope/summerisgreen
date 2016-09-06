@@ -1,0 +1,10 @@
+graph g {
+      style="filled";
+      color="lightgrey";
+      U[shape="box"];
+      "$360"[style="filled" color="yellow"];
+      U -- "$360"[label="Buy 3pm ticket"];
+      "$360" -- "$200"[label="Make the train with 0.6 chance"];
+      "$360" -- "$600"[label="Late for the train with 0.4 chance"];
+      U -- "$400"[label="Buy 4pm ticket"];
+}

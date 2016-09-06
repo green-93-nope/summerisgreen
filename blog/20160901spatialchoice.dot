@@ -1,0 +1,5 @@
+graph g {
+      node [shape=plaintext];
+      Light -- R1 -- U -- 一 -- R2 -- Hot;
+      { rank=same; Light R1 U 一 R2 Hot }
+}

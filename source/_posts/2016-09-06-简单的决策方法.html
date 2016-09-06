@@ -1,0 +1,180 @@
+---
+title: "简单的决策方法"
+date: 2016-09-06
+layout: post
+categories: 
+- 思维方式
+tags: 
+- 模型 
+- 思维方式
+published: true
+comments: 
+---
+<p>
+之前就觉得自己的决策好多都是凭感觉来做的，缺乏理性的计算。后来想要改善自己的决策方法，却又因为缺少有效的指导而没有进展。正好最近看的coursera上的model thinking课程中介绍了三个决策模型，觉得虽然原理简单但却十分实用，所以特地整理了下。
+</p>
+
+<div id="outline-container-orgheadline1" class="outline-2">
+<h2 id="orgheadline1">多标准决策模型：</h2>
+<div class="outline-text-2" id="text-orgheadline1">
+<p>
+下面以买房作为例子，来给大家看看这种方法具体该如何操作吧：
+</p>
+
+<p>
+假设想要买房的你最终决定在一号房和二号房中选择一个，而你对房子的评价指标主要有面积，位置和环境这三个指标，其中相比面积，你更加看重房子的位置和环境。通过你获得的信息，绘制出下面的表格之后，很容易发现二号房的得分比一号房的高，因此你决定选择一号房。
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="all" frame="border">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">标准</th>
+<th scope="col" class="org-right">权重</th>
+<th scope="col" class="org-left">一号房</th>
+<th scope="col" class="org-right">二号房</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">面积</td>
+<td class="org-right">1</td>
+<td class="org-left">150(*)</td>
+<td class="org-right">100</td>
+</tr>
+
+<tr>
+<td class="org-left">位置</td>
+<td class="org-right">2</td>
+<td class="org-left">*</td>
+<td class="org-right">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="org-left">环境</td>
+<td class="org-right">2</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-right">*</td>
+</tr>
+
+<tr>
+<td class="org-left">总计</td>
+<td class="org-right">&#xa0;</td>
+<td class="org-left">3</td>
+<td class="org-right">2</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+其实这就是我们经常会听说的量表评估方法。这种方法看上去简单易操作，但是在权重值的选取上可能还是值得商榷的。比如在上例中，假如我确实更看重房子的位置而不是面积的化，它们之间的关系为什么就一定是两倍而不是三倍或者四倍呢。
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline2" class="outline-2">
+<h2 id="orgheadline2">空间选择模型</h2>
+<div class="outline-text-2" id="text-orgheadline2">
+<p>
+空间选择模型针对的是像喜欢偏淡的还是偏辣的这种在一定范围内进行选择的个人口味类的决策问题。就像在下面这种情况下，你就会选择去和你口味更接近的一号餐厅而不是口味过重的二号餐厅。
+</p>
+
+<p>
+<img src="/img/20160901spatialchoice.png" alt="去哪个餐厅"/>
+</p>
+
+<p>
+空间选择模型既可以单独使用，也用于在前面所介绍的多标准决策模型中某个标准的决策。
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline5" class="outline-2">
+<h2 id="orgheadline5">决策树模型</h2>
+<div class="outline-text-2" id="text-orgheadline5">
+</div><div id="outline-container-orgheadline3" class="outline-3">
+<h3 id="orgheadline3">进行决策</h3>
+<div class="outline-text-3" id="text-orgheadline3">
+<p>
+决策树模型主要是用于涉及概率的这种不确定情况的场合。它的原理就是根据概率计算获得数学期望以进行比较。应用过程十分简单，分为下面的三个步骤：1.画出决策树; 2.写下收益支出以及每个不确定情况发生的概率。3.使用回朔法求解。在这种方法中，作图计算十分重要，我们通过下面的例子来体会一下：
+</p>
+
+<p>
+假设你突然想去参观一个展览，你查了下票务信息发现现在只有两种票在卖：
+价格为$200的下午三点的票，和价格为$400的下午四点的票。但是因为展览是在另一座城市，你需要坐火车过去。你看了下时间，发现如果去看下午三点的展览的话，时间很紧，有百分之四十的可能性赶不上那班火车。如果你今天一定要去看的话你该选哪种票呢？
+</p>
+
+<p>
+在这个问题中涉及到了不确定的情况，所以可以使用决策树模型来进行求解。比如画出了决策树之后可以使用回朔法很容易的解出如果买下午三点的票的期望价格（黄色方框处）为$360。小于买下午四点的票的期望价格($400)。所以如果你是一个理性的经济人的话，就会购买下午三点的票。
+</p>
+
+<p>
+<img src="/img/20160901decisiontree.png" alt="买几点的票？"/>
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline4" class="outline-3">
+<h3 id="orgheadline4">估计信息的价值</h3>
+<div class="outline-text-3" id="text-orgheadline4">
+<p>
+决策树模型还有一个应用就是评估信息的价值。比如在上例中如果某个有未卜先知的能力的人知道你会不会赶上三点票的那班火车。如果你想要跟他购买这个信息，你愿意出多少钱？
+虽然估计信息的价值这个问题，看上去会比较深奥，但是应用决策树模型的解决方案却十分简单，只需要下面的三个步骤即可：1.计算没有信息情况下的期望价格。2.计算含有信息的情况下的期望价格。3.计算它们之间的差额即是信息的价值。这种方法我们可以通过一个买车还是租车的例子来体会一下：
+</p>
+
+<p>
+假设你发现没有车出门不方便，因此准备去弄辆车。通过一些了解，你发现你有两种选择：一种是直接买车;一种是花一个月$500的价格租车。从长久来看可能是直接买车好，但你经过一番调研发现如果你租车的话，汽车公司会有百分之四十的机会下个月给你返回$1000的钱。你会选择买车还是租车？如果有人有汽车公司关于是否返现的内部消息，你觉得这个信息值多少钱？
+</p>
+
+<p>
+对于第一个问题，我们很容易通过之前的方法计算出租车和买车的期望价格分别为-$100和$0，因此最佳的选择应该是买车，付出价格(value_without_info)为$0。
+</p>
+
+<p>
+<img src="/img/20160901valuewithoutinfo.png" alt="买车还是租车"/>
+</p>
+
+<p>
+为了回答第二个问题，还需要计算如果有这个信息的情况下的付出价格。有信息的情况下的付出价格和无信息情况下的不同，因为汽车公司有无现金的返回是可以在实际做出租车还是买车的决策之前获得的信息。
+</p>
+
+<p>
+<img src="/img/20160901valuewithinfo.png" alt="知道返现信息的情况下的期望付出价格"/>
+</p>
+
+<p>
+在结合了汽车公司返现的可能性之后，可以通过下式得到有信息的情况下的付出价格为两百美元:
+</p>
+
+<p>
+value_with_info = 500 * 0.4 + 0 * 0.6 = $200
+</p>
+
+<p>
+最后我们就可以作差计算得出信息的价值为两百美元（具体计算过程如下）。
+</p>
+
+<p>
+value_of_info = value_with_info - value_without_info = $200
+</p>
+
+<p>
+*
+</p>
+
+<p>
+<!-- more -->
+</p>
+</div>
+</div>
+</div>
