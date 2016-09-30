@@ -1,0 +1,9 @@
+#+TITLE: 使用Hexo和emacs-Org来写博客
+#+DATE: 2016-09-30
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES:
+#+JEKYLL_TAGS:
+#+JEKYLL_PUBLISHED: true
+
+* 部署博客

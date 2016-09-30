@@ -1,0 +1,75 @@
+#+TITLE: arch下使用aria2下载资源
+#+DATE: 2016-09-25
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: archlinux
+#+JEKYLL_TAGS: archlinux
+#+JEKYLL_PUBLISHED: true
+
+linux世界中一直没有迅雷这样在windows中文用户中占有统治地位的下载工具，而像gnome和kde等桌面环境中自带的utorrent或ktorrent等下载工具，
+本身下载速度不快，还又有着占用内存资源多，支持下载协议有限的缺点。对于追求简洁高效的系统的人来说，自然是难以接受的。
+后来经过一番调研，终于找到了一款满意的下载工具--aria2。
+
+* aria2是什么？
+aria2是一款轻量级的、支持多协议的和多个下载源的下载工具，支持HTTP/HTTPS，FTP，SFTP，BitTorrent以及Metalink等协议的下载。
+具体介绍可参照[[https://aria2.github.io/][aria2官网]]。
+
+我想在这里说一下它的两个非常惊艳的优点：一个是轻量级：占用内存空间十分少，通常只占用4-9MB。
+另一个优势就是支持RPC界面远程控制，可以很方便的对被配置为服务器的主机进行下载管理。
+
+体会到了aria2的强大了之后，就来看看正确安装并配置aria2。
+
+* aria2的安装及配置
+** 安装aria2
+由于aria2已经在archlinux的官方仓库中，所以安装十分方便，直接在命令行中使用pacman包管理工具进行安装即可:
+
+#+BEGIN_SRC bash
+$ sudo pacman -S aria2
+#+END_SRC
+
+此时已经可以直接通过命令行运行aria2来进行下载，不过并不推荐。
+因为相对于每次都通过命令行参数来对断点续传或者速度限制等功能进行说明的方法来说，有着更好的替代方案--使用配置文件启动aria2服务，再通过web图形前端进行管理。
+
+** 配置aria2
+配置文件主要用于你的RPC信息以及下载相关的速度，进度以及磁盘等信息的设置。具体可参考[[https://github.com/green-93-nope/myConfiguration/blob/master/aria2/aria2.conf][我的配置]]。
+该配置文件一般放在$HOME/.aria2/aria2.conf中。
+
+除了这个配置文件之外你还需要创建一个session.lock文件，用来管理下载历史。
+该文件所放置的位置和配置文件中的input-file和save-session对应即可。
+
+配置完成后运行下面的命令，即可启动aria2到后台。-D表示运行程序到后台。
+假如你不确定自己的配置是否正确，你可以命令后不加-D来观察输出是否正确。
+
+#+BEGIN_SRC bash
+$ aria2c --conf-path=<PATH> -D
+#+END_SRC
+
+如果你和我一样厌烦了每次都要输入这一大堆命令你可以使用alias别名或者写一个简单的脚本来简化你的输入。
+
+** 图形前端
+aria2本身并没有图形界面，不过可以通过一些开源的web图形前端来进行管理，也是非常方便的。
+
+比较有名并且好用的图形前端主要有[[https://github.com/binux/yaaw][YAAW]] 和[[https://github.com/ziahamza/webui-aria2][webui-aria2]]。
+我使用的是第二个。
+
+这两款应用都已经在arch的AUR仓库中了，使用yaourt可以很方便的安装。比如：
+
+#+BEGIN_SRC bash
+$ sudo yaourt -S webui-aria2
+#+END_SRC
+
+安装完成后在浏览器中打开[[http://ziahamza.github.io/webui-aria2/][管理页面]] 即可进行管理，是不是特别简单。
+
+** 更多
+aria2并不只是一个简单的下载工具，你还可以用它来：
+
+1.下载百度云链接[[https://github.com/acgotaku/BaiduExporter][BaiduExporter]]。
+
+2.下载迅雷离线内容[[http://binux.github.io/ThunderLixianExporter/][ThunderLixianExporter]]
+
+* 参考
+1.[[http://blog.binux.me/2012/12/aria2-examples/][aria2配置示例]]
+
+2.[[http://moflying.com/2016/06/05/%25E5%25A6%2582%25E4%25BD%2595%25E4%25BD%25BF%25E7%2594%25A8aria2%25E5%258F%258Awebui-aria2%25E4%25B8%258B%25E8%25BD%25BD%25E7%2599%25BE%25E5%25BA%25A6%25E4%25BA%2591%25E8%25B5%2584%25E6%25BA%2590/][如何使用aria2及webui-aria2下载百度云资源]]
+
+3.[[https://wiki.archlinux.org/index.php/Aria2][aria2-archwiki]]

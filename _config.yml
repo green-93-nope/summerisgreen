@@ -7,7 +7,7 @@ title: Summer is Green
 subtitle: a blog for writing and thinking
 description: Abracadabra
 author: Green
-language: zh_Hans
+language: zh-Hans
 timezone:
 
 # URL
@@ -65,6 +65,9 @@ pagination_dir: page
 ## Themes: https://hexo.io/themes/
 theme: next
 
+# author image
+avatar: /img/author.jpg
+
 feed:
   type: atom
   path: atom.xml
@@ -74,6 +77,8 @@ feed:
 # Deployment
 ## Docs: https://hexo.io/docs/deployment.html
 deploy:
-  type: github
-  repository: https://github.com/green-93-nope/green-93-nope.github.io.git
+  type: git
+  repository: git@github.com:green-93-nope/green-93-nope.github.io.git
   branch: master
+
+baidu_analytics: 8c73f2284db49cbb33f0d50d3b61e9bb

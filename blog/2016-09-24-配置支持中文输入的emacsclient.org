@@ -1,0 +1,83 @@
+#+TITLE: 配置支持中文输入的emacsclient
+#+DATE: 2016-09-24
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: emacs
+#+JEKYLL_TAGS: emacs
+#+JEKYLL_PUBLISHED: true
+
+因为习惯了emacs的快捷键，所以一直想要将arch的默认编辑器设置为emacs。
+但是emacs每次启动都要加载大量的配置文件，特别慢，所以一直是通过gedit来进行简单的快速编辑。
+
+最近看到了一个使用emacsclient的方法，觉得不错特意尝试了一下。
+不过在将其配置为支持中文输入的过程中遇到了一些麻烦，在搜索解决方案的过程中又发现这方面的资料并不多，
+所以特地在这里介绍下完整的配置过程和使用方法。
+
+* emacsclient
+emacsclient的原理十分简单，就是先启动一个emacs作为守护进程，每次想要进行一个新的编辑时，就打开一个窗口并链接到守护进程。
+这样就免去了最耗时的每次启动时的加载配置，十分快速的同时还拥有你自定义的配置。
+
+对于emacs英文用户来说，在终端下直接运行如下命令即可打开终端下的或者带有图形界面的emacs客户端。
+
+#+BEGIN_SRC bash
+$ emacsclient -t -a ""  #在终端中开启emacs
+$ emacsclient -nc -a ""  #启动emacs图形界面
+#+END_SRC
+其中-a ""参数表示，当第一次运行这个命令时，它会把emacs当作守护进程来启动，之后就会一直驻留在后台。
+等到再次使用emacsclient时，就会把新建的窗口链接到该守护程序实现快速启动。
+
+但是对于中文用户，进入后就会发现中文乱码，而且fcitx输入法无法被激活。因此需要一些额外的配置来支持中文的显示及中文输入法的使用。
+
+* 新窗口中支持中文字体
+因为在emacs中关于界面和字体的设置只有在创建新的frame时才有效，而启动服务器的时候并没有创建frame。
+所以emacsclient中的中文字体需要下面的配置来额外进行设置。
+
+#+BEGIN_SRC emacs
+(setq window-system-default-frame-alist
+      '(
+        ;; if frame created on x display
+        (x
+         (menu-bar-lines . 1)
+         (tool-bar-lines . nil)
+         ;; mouse
+         (mouse-wheel-mode . 1)
+         (mouse-wheel-follow-mouse . t)
+         (mouse-avoidance-mode . 'exile)
+         ;; face 具体可以更换为系统支持的中文字体
+         (font . "WenQuanYi Micro Hei Mono 12")
+         )
+        ;; if on term
+        (nil
+         (menu-bar-lines . 0) (tool-bar-lines . 0)
+         ;; (background-color . "black")
+         ;; (foreground-color . "white")
+         )
+        )
+      )
+#+END_SRC
+
+* 用户环境变量配置
+在系统环境中LC_CTYPE默认为英文时，此时在Emacs上可能无法使用输入法。为了能够支持fcitx的输入，在启动Emacs时需要指定LC_CTYPE为zh_CN.UTF-8。
+比如启动下面的命令，就可以使用支持fcitx中文输入的emacs:
+
+#+BEGIN_SRC bash
+$ LC_CTYPE=zh_CN.UTF-8 emacs
+#+END_SRC
+
+当然你还可以利用alias别名命令来简化命令的输入。
+比如我就在自己的个人环境信息配置文件(.profile或者.bashrc)中加入如下信息。
+
+#+BEGIN_SRC bash
+alias emacs='LC_CTYPE=zh_CN.UTF-8 emacs'
+alias em='emacsclient -t -a ""'  #在终端中开启emacs
+alias emc='LC_CTYPE=zh_CN.UTF-8 emacsclient -nc -a ""'  #启动emacs图形界面
+export EDITOR="$(if [[ -n $DISPLAY ]]; then echo 'LC_CTYPE=zh_CN.UTF-8 emacsclient -a ""'; else echo 'vi'; fi)"
+#+END_SRC
+
+之后直接在终端下输入emc，就可以快速启动emacsclient的图形界面进行编辑了，就是这么简单哈。
+* 参考
+1.[[https://wiki.archlinux.org/index.php/Emacs_(%25E7%25AE%2580%25E4%25BD%2593%25E4%25B8%25AD%25E6%2596%2587)][Emacs--archwiki]]
+
+2.[[http://emacser.com/daemon.htm][使用emacs daemon]]
+
+3.[[https://wiki.archlinux.org/index.php/Fcitx_(%25E7%25AE%2580%25E4%25BD%2593%25E4%25B8%25AD%25E6%2596%2587)#Emacs_.E6.97.A0.E6.B3.95.E4.BD.BF.E7.94.A8.E8.BE.93.E5.85.A5.E6.B3.95][fcitx--archlinux]]
