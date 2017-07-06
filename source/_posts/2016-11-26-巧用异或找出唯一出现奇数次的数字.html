@@ -1,0 +1,153 @@
+---
+title: "巧用异或找出唯一出现奇数次的数字"
+date: 2016-11-26
+layout: post
+categories: 
+- 编程技巧
+tags: 
+- 编程技巧
+published: true
+comments: 
+---
+<p>
+异或操作看似是数字逻辑的一个很简单的运算方法，
+但却具有一些很有用的特性，用好的话，对一些问题的解决可以起到四两拨千斤的效果。
+<!-- more -->
+</p>
+
+<div id="outline-container-org8222f41" class="outline-2">
+<h2 id="org8222f41">异或方法的基本原理</h2>
+<div class="outline-text-2" id="text-org8222f41">
+<p>
+在维基百科中异或是这样定义的：在数字逻辑中，逻辑算符互斥（exclusive or）是对两个运算元的一种逻辑分析类型。
+而基于二进制的计算机中的信息操作就可以看作是一堆进行数字逻辑操作的信息。
+这也是异或操作在计算机中的运算速度非常快的一个原因。
+</p>
+
+<p>
+在数字逻辑中的运算方法有很多，而异或方法却能产生一些看似很奇妙的应用，
+这主要是因为它具有的数学上的一些特性：
+</p>
+<ul class="org-ul">
+<li>交换率：A^B=B^A</li>
+<li>结合率：A^B^C=A^(B^C)</li>
+<li>归零率：A^A=0</li>
+<li>自反：A^B^B=A</li>
+</ul>
+</div>
+</div>
+
+
+<div id="outline-container-org2ab7899" class="outline-2">
+<h2 id="org2ab7899">异或方法的一些简单的应用</h2>
+<div class="outline-text-2" id="text-org2ab7899">
+<p>
+知道了异或的数学性质之后，就可以发现下面两道题目使用异或操作非常简单了。
+</p>
+</div>
+
+<div id="outline-container-org7e0bb9a" class="outline-3">
+<h3 id="org7e0bb9a">快速比较两个数的值是否相等</h3>
+<div class="outline-text-3" id="text-org7e0bb9a">
+<p>
+在对时间和空间效率要求非常高的计算机底层编程中，
+经常会看到有汇编程序利用异或的归零率的特性，快速比较两个数的值是否相等。
+</p>
+
+<div class="org-src-container">
+<pre class="src src-python">a^b == <span style="color: #a45bad;">0</span>
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgd01cc32" class="outline-3">
+<h3 id="orgd01cc32">不使用其他空间交换两个数的值</h3>
+<div class="outline-text-3" id="text-orgd01cc32">
+<p>
+应用异或操作的自反的性质，就可以在不使用额外空间的前提下交换两个数的值。
+</p>
+
+<div class="org-src-container">
+<pre class="src src-python"><span style="color: #7590db;">a</span> = a^b
+<span style="color: #7590db;">b</span> = a^b
+<span style="color: #7590db;">a</span> = a^b
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgc24af93" class="outline-2">
+<h2 id="orgc24af93">一些奇妙的应用</h2>
+<div class="outline-text-2" id="text-orgc24af93">
+<p>
+除了在上面这些简单的问题上，可以使用异或操作的小技巧，并且使程序的时间和空间效率得到改善以外。
+异或方法还可以在一些较为复杂的问题上得到应用，
+比如下面将会介绍的用来在一组数中找出唯一一个只出现了奇数次的数字这一系列问题。
+</p>
+</div>
+
+<div id="outline-container-org458b751" class="outline-3">
+<h3 id="org458b751">校招之找出未打卡员工题</h3>
+<div class="outline-text-3" id="text-org458b751">
+<p>
+今天看到的是一道可以使用该种方法的很简单的校招笔试题目。
+</p>
+
+<pre class="example">
+题目：输入两行数据，第一行为全部员工的 id，第二行为某一天打卡的员工 id，
+已知只有一个员工没有打卡，求出未打卡员工的 id。（员工 id 不重复，每行输入的 id 未排序）
+
+输入：
+1001 1003 1002 1005 1004
+1002 1003 1001 1004
+
+输出：
+1005
+</pre>
+</div>
+</div>
+
+<div id="outline-container-org2e6b0be" class="outline-3">
+<h3 id="org2e6b0be">leetcode之Single Number III</h3>
+<div class="outline-text-3" id="text-org2e6b0be">
+<p>
+之前在leetcode上也看到过一个使用异或方法将会非常简单的题目，时间和空间复杂度分别为O(n)和O(1)。
+</p>
+
+<pre class="example">
+Given an array of numbers nums,
+in which exactly two elements appear only once and
+all the other elements appear exactly twice.
+
+Find the two elements that appear only once.
+</pre>
+
+<p>
+<!-- more -->
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgdc3ba09" class="outline-2">
+<h2 id="orgdc3ba09">参考</h2>
+<div class="outline-text-2" id="text-orgdc3ba09">
+<p>
+<a href="https://en.wikipedia.org/wiki/Exclusive_or">Exclusive or</a>
+</p>
+
+<p>
+<a href="https://www.lijinma.com/blog/2014/05/29/amazing-xor/">感受异或的神奇</a>
+</p>
+
+<p>
+<a href="http://www.alijava.com/campus-interview/">2017互联网校招的一些面试题</a>
+</p>
+
+<p>
+<a href="https://leetcode.com/problems/single-number-iii/">Single Number III</a>
+</p>
+</div>
+</div>

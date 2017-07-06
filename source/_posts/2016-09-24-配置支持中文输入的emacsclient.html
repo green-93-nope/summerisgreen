@@ -10,55 +10,53 @@ published: true
 comments: 
 ---
 <p>
-因为习惯了emacs的快捷键，所以一直想要将arch的默认编辑器设置为emacs。
-但是emacs每次启动都要加载大量的配置文件，特别慢，所以一直是通过gedit来进行简单的快速编辑。
+因为习惯了 emacs 的高效编辑，所以一直想要将arch的默认编辑器设置为emacs。
+然而 emacs 每次启动都要加载大量的配置文件，缓慢的打开速度使它很难作为快速的编辑工具来使用。
 </p>
 
 <p>
-最近看到了一个使用emacsclient的方法，觉得不错特意尝试了一下。
-不过在将其配置为支持中文输入的过程中遇到了一些麻烦，在搜索解决方案的过程中又发现这方面的资料并不多，
-所以特地在这里介绍下完整的配置过程和使用方法。
+最近发现了一个非常不错的通过使用emacsclient来快速启动新的emacs窗口的解决方案。
+并且通过一些额外的设置可以很好地支持中文输入。
 </p>
 
-<div id="outline-container-orgheadline1" class="outline-2">
-<h2 id="orgheadline1">emacsclient</h2>
-<div class="outline-text-2" id="text-orgheadline1">
+<div id="outline-container-org03ed370" class="outline-2">
+<h2 id="org03ed370">emacsclient</h2>
+<div class="outline-text-2" id="text-org03ed370">
 <p>
-emacsclient的原理十分简单，就是先启动一个emacs作为守护进程，每次想要进行一个新的编辑时，就打开一个窗口并链接到守护进程。
+emacsclient 的原理十分简单，就是预先启动一个emacs作为守护进程，每次想要进行一个新的编辑时，就打开一个窗口并链接到守护进程。
 这样就免去了最耗时的每次启动时的加载配置，十分快速的同时还拥有你自定义的配置。
 </p>
 
 <p>
-对于emacs英文用户来说，在终端下直接运行如下命令即可打开终端下的或者带有图形界面的emacs客户端。
+对于emacs英文用户来说，在终端下直接运行如下命令即可打开终端下的或者带有图形界面的 emacs 客户端。
 </p>
 
 <div class="org-src-container">
-
-<pre class="src src-bash">$ emacsclient -t -a <span style="color: #2aa198;">""</span>  <span style="color: #93a1a1; font-style: italic;">#</span><span style="color: #93a1a1; font-style: italic;">&#22312;&#32456;&#31471;&#20013;&#24320;&#21551;emacs</span>
-$ emacsclient -nc -a <span style="color: #2aa198;">""</span>  <span style="color: #93a1a1; font-style: italic;">#</span><span style="color: #93a1a1; font-style: italic;">&#21551;&#21160;emacs&#22270;&#24418;&#30028;&#38754;</span>
+<pre class="src src-bash">$ emacsclient -t -a <span style="color: #2d9574;">""</span>  <span style="color: #2aa1ae; background-color: #292e34;">#</span><span style="color: #2aa1ae; background-color: #292e34;">&#22312;&#32456;&#31471;&#20013;&#24320;&#21551;emacs</span>
+$ emacsclient -nc -a <span style="color: #2d9574;">""</span>  <span style="color: #2aa1ae; background-color: #292e34;">#</span><span style="color: #2aa1ae; background-color: #292e34;">&#21551;&#21160;emacs&#22270;&#24418;&#30028;&#38754;</span>
 </pre>
 </div>
 <p>
 其中-a ""参数表示，当第一次运行这个命令时，它会把emacs当作守护进程来启动，之后就会一直驻留在后台。
-等到再次使用emacsclient时，就会把新建的窗口链接到该守护程序实现快速启动。
+等到再次使用 emacsclient 时，就会把新建的窗口链接到该守护程序实现快速启动。
 </p>
 
 <p>
-但是对于中文用户，进入后就会发现中文乱码，而且fcitx输入法无法被激活。因此需要一些额外的配置来支持中文的显示及中文输入法的使用。
+但是对于中文用户来说，进入后就会发现会遇到中文乱码，fcitx 输入法无法被激活的问题。
+不过可以通过下面这些额外的设置来解决这两个问题。
 </p>
 </div>
 </div>
 
-<div id="outline-container-orgheadline2" class="outline-2">
-<h2 id="orgheadline2">新窗口中支持中文字体</h2>
-<div class="outline-text-2" id="text-orgheadline2">
+<div id="outline-container-org6d8c6e1" class="outline-2">
+<h2 id="org6d8c6e1">新窗口中支持中文字体</h2>
+<div class="outline-text-2" id="text-org6d8c6e1">
 <p>
-因为在emacs中关于界面和字体的设置只有在创建新的frame时才有效，而启动服务器的时候并没有创建frame。
-所以emacsclient中的中文字体需要下面的配置来额外进行设置。
+因为在 emacs 中关于界面和字体的设置只有在创建新的frame时才有效，而启动服务器的时候并没有创建frame。
+所以要想在 emacsclient 中正确的显示中文字体必须要添加一些额外的设置。
 </p>
 
 <div class="org-src-container">
-
 <pre class="src src-emacs">(setq window-system-default-frame-alist
       '(
         ;; if frame created on x display
@@ -82,20 +80,23 @@ $ emacsclient -nc -a <span style="color: #2aa198;">""</span>  <span style="color
       )
 </pre>
 </div>
+
+<p>
+对于 spacemacs 用户来说，默认的配置已经解决了新窗口的字体问题，所以不需要再进行额外的设置了。
+</p>
 </div>
 </div>
 
-<div id="outline-container-orgheadline3" class="outline-2">
-<h2 id="orgheadline3">用户环境变量配置</h2>
-<div class="outline-text-2" id="text-orgheadline3">
+<div id="outline-container-orgbc72cff" class="outline-2">
+<h2 id="orgbc72cff">用户环境变量配置</h2>
+<div class="outline-text-2" id="text-orgbc72cff">
 <p>
-在系统环境中LC_CTYPE默认为英文时，此时在Emacs上可能无法使用输入法。为了能够支持fcitx的输入，在启动Emacs时需要指定LC_CTYPE为zh_CN.UTF-8。
-比如启动下面的命令，就可以使用支持fcitx中文输入的emacs:
+一般言系统环境中LC_CTYPE默认设置为英文，此时在Emacs上可能无法使用输入法。为了能够支持fcitx的输入，在启动Emacs时需要指定LC_CTYPE为zh_CN.UTF-8。
+使用下面的命令进行，就可以使用支持fcitx中文输入的emacs:
 </p>
 
 <div class="org-src-container">
-
-<pre class="src src-bash">$ <span style="color: #6c71c4;">LC_CTYPE</span>=zh_CN.UTF-8 emacs
+<pre class="src src-bash">$ <span style="color: #7590db;">LC_CTYPE</span>=zh_CN.UTF-8 emacs
 </pre>
 </div>
 
@@ -105,11 +106,10 @@ $ emacsclient -nc -a <span style="color: #2aa198;">""</span>  <span style="color
 </p>
 
 <div class="org-src-container">
-
-<pre class="src src-bash"><span style="color: #6c71c4;">alias</span> <span style="color: #6c71c4;">emacs</span>=<span style="color: #2aa198;">'LC_CTYPE=zh_CN.UTF-8 emacs'</span>
-<span style="color: #6c71c4;">alias</span> <span style="color: #6c71c4;">em</span>=<span style="color: #2aa198;">'emacsclient -t -a ""'</span>  <span style="color: #93a1a1; font-style: italic;">#</span><span style="color: #93a1a1; font-style: italic;">&#22312;&#32456;&#31471;&#20013;&#24320;&#21551;emacs</span>
-<span style="color: #6c71c4;">alias</span> <span style="color: #6c71c4;">emc</span>=<span style="color: #2aa198;">'LC_CTYPE=zh_CN.UTF-8 emacsclient -nc -a ""'</span>  <span style="color: #93a1a1; font-style: italic;">#</span><span style="color: #93a1a1; font-style: italic;">&#21551;&#21160;emacs&#22270;&#24418;&#30028;&#38754;</span>
-<span style="color: #6c71c4;">export</span> <span style="color: #6c71c4;">EDITOR</span>=<span style="color: #2aa198;">"$(if [[ -n $DISPLAY ]]; then echo 'LC_CTYPE=zh_CN.UTF-8 emacsclient -a ""'; else echo 'vi'; fi)"</span>
+<pre class="src src-bash"><span style="color: #4f97d7;">alias</span> <span style="color: #7590db;">emacs</span>=<span style="color: #2d9574;">'LC_CTYPE=zh_CN.UTF-8 emacs'</span>
+<span style="color: #4f97d7;">alias</span> <span style="color: #7590db;">em</span>=<span style="color: #2d9574;">'emacsclient -t -a ""'</span>  <span style="color: #2aa1ae; background-color: #292e34;">#</span><span style="color: #2aa1ae; background-color: #292e34;">&#22312;&#32456;&#31471;&#20013;&#24320;&#21551;emacs</span>
+<span style="color: #4f97d7;">alias</span> <span style="color: #7590db;">emc</span>=<span style="color: #2d9574;">'LC_CTYPE=zh_CN.UTF-8 emacsclient -nc -a ""'</span>  <span style="color: #2aa1ae; background-color: #292e34;">#</span><span style="color: #2aa1ae; background-color: #292e34;">&#21551;&#21160;emacs&#22270;&#24418;&#30028;&#38754;</span>
+<span style="color: #4f97d7;">export</span> <span style="color: #7590db;">EDITOR</span>=<span style="color: #2d9574;">"$(if [[ -n $DISPLAY ]]; then echo 'LC_CTYPE=zh_CN.UTF-8 emacsclient -a ""'; else echo 'vi'; fi)"</span>
 </pre>
 </div>
 
@@ -118,9 +118,9 @@ $ emacsclient -nc -a <span style="color: #2aa198;">""</span>  <span style="color
 </p>
 </div>
 </div>
-<div id="outline-container-orgheadline4" class="outline-2">
-<h2 id="orgheadline4">参考</h2>
-<div class="outline-text-2" id="text-orgheadline4">
+<div id="outline-container-org20f07f0" class="outline-2">
+<h2 id="org20f07f0">参考</h2>
+<div class="outline-text-2" id="text-org20f07f0">
 <p>
 1.<a href="https://wiki.archlinux.org/index.php/Emacs_(%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87)">Emacs&#x2013;archwiki</a>
 </p>
