@@ -6,101 +6,46 @@
 #+JEKYLL_TAGS: emacs blog
 #+JEKYLL_PUBLISHED: true
 
-经过一段时间的纠结，终于再次下定决心开通博客。
-这次决定要开始写博客，主要是因为发现自己在过去的一年内虽然看了很多书，但绝大部分的内容却都又被遗忘了。
-而剩下的那部分知识仔细回想起来也都觉得是非常混乱而且肤浅的。
-所以想要通过<The Craft of Research>中所提倡的以书面形式思考来改善自己的知识体系管理和思维深度。
-
-写博客就是自己以书面形式思考的一部分，因为未来准备成为一名程序员，所以期望自己的博客除了平常的读书感悟外还能有如下的内容：
-+ 分享一些优秀的技术工具及配置
-+ 编程方面的心得
-+ 一些体系知识的整理
-
-* 部署博客网站
-对于博客的部署采用目前最流行的Github Pages + Hexo的组合。
-这种方法有着免费、简单、主题多、网上教程多等众多优点，而且遇到问题随时可以google到解决方案，
-作为一个简单省心的博客来说，是再好不过的选择了。
-
-具体的博客部署可以分为购买域名，绑定域名到Github Page，和使用Hexo部署博客三个步骤来进行。
-
-** 购买域名
-作为一个自己搭建的博客网站怎么能没有自己的域名呢。
-域名的话一般在godaddy上购买。
-
-** 绑定域名到Github Page
-在博客部署过程中最重要的一步就是绑定域名到Github Page上。
-在你完成了域名的绑定之后，只要别人在浏览器中输入你的域名，比如:www.baidu.com，
-就可以获取到你的网页服务也就是显示出你的博客来。只有这样你所选择的域名才真正属于你。
-
-这整个过程可以分为两个步骤来完成：
-
-*** 申请Github Pages的空间
-个人或者项目主页的仓库的命名是有固定的要求的，必须命名为username.github.io。
-为了在别人向github网站请求你的服务时github能够回应你的服务内容，
-你需要向github注册你的服务名称，也就是域名。
-方法是在主目录建立一个有且仅有你的域名名称的CNAME文件来进行说明。
-
-*** dns设置
-在有了网页的服务之后，还欠缺的一项服务就是dns服务。
-也就是如何引导访问你域名的请求到达你的服务器，在这里就是github page的服务器地址。
-
-简单的做法是直接在godaddy中进行dns的详细设置，不过因为一些大家都懂的原因，
-godaddy的dns服务经常会碰到在国内被屏蔽而无法访问的情况。
-所以这里需要使用第三方dns来进行解析，一般推荐是使用免费而又快速的dnspod。
-
-**** godaddy修改NS记录
-为了使用第三方的dns服务，还需要在godaddy中添加如下的NameService记录：
-
-f1g1ns1.dnspod.net，f1g1ns2.dnspod.net。
-
-这样别人向高级域名服务器（godaddy的dns服务器）请求你的服务时，就可以获得dnspod的dns服务器的地址了。
-
-**** dnspod进行dns设置
-最后只要再对dnspod进行些设置就可以完成域名访问请求从dnspod到github page的引导。
-
-这一步也是非常简单，注册完成后添加你的需要解析的博客域名
-
-之后先添加下面两个github pages的ip地址作为A记录。
-
-192.30.252.153，192.30.252.154
-
-然后再添加你的github page的仓库名作为CNAME记录即可。
-
-** 使用Hexo部署博客
-之前已经完成了博客网站的初步准备工作，接下来就可以使用博客框架来进行博客的快速部署了。
-
-之所以选用Hexo来作为博客框架，是因为它使用简单，而且还拥有非常丰富的主题资源。
-
-在这里还会碰到的一个小问题就是每次重新生成静态文件并部署了之后，根目录下的CNAME文件都会消失。
-这个只需要在source文件夹中添加相应的CNAME文件即可解决。
-
-在使用nodejs安装了hexo之后，就可以通过简单的命令来进行启动服务器或者部署博客这些常用的操作。
-具体的命令可以参考[[https://hexo.io/zh-cn/docs/commands.html][hexo文档]]。
 
 * 使用org-mode来写博客
-因为现在流行的博客框架包括hexo都是以markdown作为默认文本格式的。
-如果直接添加org文本的话，格式解析是不匹配的，所以需要通过一些方法来将org文本直接解析为html格式。
-
-google了下发现org-octopress这个插件来完成这个需求了，emacs丰富的插件果然没有让我失望。
+最近闲着部署了一个静态博客，开启了自己的博客生涯，
+采用的方案是目前最流行的 Github Pages + Hexo 。
+使用 Hexo 博客框架可以方便快捷地完成部署，发布的功能，不过其只默认支持解析 markdown 格式的文章。
+作为一个 emacs 用户，习惯于使用功能变态级强大的 org-mode 来写文档，自然也想要让自己的博客能够直接支持解析 org 格式文件。
+对于这项任务，google了下发现已经有人做了 org-octopress 这个插件来支持 org-mode 写博客，
+emacs 丰富的开源插件果然是很强大。
 
 ** 配置org-octopress
-从Melpa中安装了org-octopress之后，添加下面的代码作为你的文章发布的基础设置。
+为了配置该功能，首先从Melpa软件仓库中安装org-octopress，并添加下面的代码设置你的文章发布功能。
 
 #+BEGIN_SRC elisp
   (require 'org-octopress)
-  (setq org-octopress-directory-top       "~/Hexo")
-  (setq org-octopress-directory-posts     "~/Hexo/source/_posts") ;文章发布目录
-  (setq org-octopress-directory-org-top   "~/Hexo")
-  (setq org-octopress-directory-org-posts "~/Hexo/blog") ;org文章目录
-  (setq org-octopress-setup-file          "~/Hexo/setupfile.org")
+  (setq org-octopress-directory-top       "~/YourBlogDirectory")
+  (setq org-octopress-directory-posts     "~/YourBlogDirectory/source/_posts") ;文章发布目录
+  (setq org-octopress-directory-org-top   "~/YourBlogDirectory")
+  (setq org-octopress-directory-org-posts "~/YourBlogDirectory/blog") ;org文章目录
+  (setq org-octopress-setup-file          "~/YourBlogDirectory/setupfile.org")
 
 #+END_SRC
 
-之后就可以使用C-c C-e P 来使用octopress输出为你的Hexo博客文章。
+其中的具体目录可以依据自己的实际情况进行修改，
+在这里 top 指定的是博客的根目录；posts 为发布成 html 格式的文章所在的目录；
+org-posts 为你使用 org 模式写的博客所在的目录；
+org-top 为 org 博客的上一级别目录。
+
+完成了之前的设定之后，你需要修改博客目录下的 _config.yml，以便适配 org-octopress 解析成的 html 博客文件：
+#+BEGIN_EXAMPLE
+permalink: /blog/:year-:month-:day-:title.html
+#+END_EXAMPLE
+
+接下来，你就可以使用 org-octopress 功能，此时会进入一个博客文章管理的 buffer，在这里面可以轻松地添加、修改或删除博客文章。
+
+最后，当你写完博客以后，org-export-dispatch 中的 Publish 选项中来选择导出当前的博客文章或者整个 octopress 工程。
+如果你想要预览你的文章的效果，你可以使用 prodigy 来快速查看，具体配置及使用可见 [[prodigy][下一章节]]。
 
 ** org博客中引用图片
-使用org-mode来写博客还需要解决的一个问题就是文章中引用图片的问题。
-解决方法是在emacs的配置文件中加入下面的代码：
+为了避免在 org-mode 输出为 html 的过程中，图片引用路径产生问题，
+需要在 emacs 的配置文件中加入下面的代码来在 org-mode 中注册一种新的图片引用格式。
 #+BEGIN_SRC elisp
   (require 'ox-publish)
   (defun org-custom-link-img-follow (path)
@@ -114,19 +59,21 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 
   (org-add-link-type "img" 'org-custom-link-img-follow 'org-custom-link-img-export)
 #+END_SRC
-之后引用的图片无论是在本地服务器中还是在部署的博客网站中都能很好的显示。
+这两个路径所代表的图片存储位置分别是从 org 格式的文章所在的目录和 web 服务器的角度来看的。
+如果使用该种配置方式，为了方便引用，建议将图片保存在 source 文件夹中。
 
 * 在emacs中启动服务器和部署博客
-在emacs中启动外部服务的任务可以通过Prodigy这个插件提供的功能完成。
-在Melpa中安装了该插件之后，添加下面的代码到你的配置文件后，就可以通过M-x
- prodigy来启动相应的服务了。
+<<prodigy>>
+在 emacs 中启动外部服务的任务可以通过 Prodigy 这个插件提供的功能完成。
+在 Melpa 中安装了该插件之后，添加下面的代码到你的配置文件后，就可以使用
+ prodigy 来快速地进行本地调试(Hexo Server）和部署（Hexo Deploy）。
 
 #+BEGIN_SRC elisp
 (prodigy-define-service
  :name "Hexo Server"
  :command "hexo"
  :args '("server")
- :cwd "~/Hexo"
+ :cwd "~/YourBlogDirectory"
  :tags '(hexo server)
  :kill-signal 'sigkill
  :kill-process-buffer-on-stop t)
@@ -135,20 +82,18 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
  :name "Hexo Deploy"
  :command "hexo"
  :args '("deploy" "--generate")
- :cwd "~/Hexo"
+ :cwd "~/YourBlogDirectory"
  :tags '(hexo deploy)
  :kill-signal 'sigkill
  :kill-process-buffer-on-stop t)
 #+END_SRC
 
-你可以通过s来启动所选服务，使用S来停止对应的服务，
-该模式的详细的快捷键定义在prodigy-mode-map中，不过知道这两个就应该够用了。
+在 prodigy 模式下你可以通过s来启动所选服务，使用S来停止对应的服务，
+该模式的详细的快捷键定义在 prodigy-mode-map 中，不过知道这两个就应该够用了。
 
 * 参考
-1.[[http://cnfeat.com/blog/2014/05/10/how-to-build-a-blog/][如何搭建一个独立博客——简明 Github Pages与 jekyll 教程]]
+1.[[https://zilongshanren.com/blog/2015-07-19-add-org-mode-support.html][使用 Org-mode 来写博客]]
 
-2.[[https://zilongshanren.com/blog/2015-07-19-add-org-mode-support.html][使用 Org-mode 来写博客]]
+2.[[https://zilongshanren.com/blog/2015-08-02-migrate-blog-to-hexo.html][迁移博客到 Hexo]]
 
-3.[[https://zilongshanren.com/blog/2015-08-02-migrate-blog-to-hexo.html][迁移博客到 Hexo]]
-
-4.[[http://stackoverflow.com/questions/14684263/how-to-org-mode-image-absolute-path-of-export-html][how to org mode image absolute path of export html]]
+3.[[http://stackoverflow.com/questions/14684263/how-to-org-mode-image-absolute-path-of-export-html][how to org mode image absolute path of export html]]

@@ -1,0 +1,127 @@
+#+TITLE: 算法技巧-使用动态规划求解部分和问题
+#+DATE: 2017-07-28
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: 编程技巧
+#+JEKYLL_TAGS: 编程技巧 算法
+#+JEKYLL_PUBLISHED: true
+
+* 部分和问题
+在算法中，有一类常见的问题被称为部分和问题。
+在这类问题中，你需要判断是否能够使用给定数组中的部分数，通过累加获得所要获得的目标和。
+而对于每个候选数字，在有些题目中你只能使用一次，而在另一些题目中则可以多次使用。
+在后面我们会看到，这两种情况都可以使用动态规划方法来求解，只不过具体的求解思路会有一些不同。
+* Partition Equal Subset Sum
+#+BEGIN_EXAMPLE
+Given a non-empty array containing only positive integers, find if the array can be partitioned into two subsets such that the sum of elements in both subsets is equal.
+#+END_EXAMPLE
+
+为了解决这个问题，首先假设我们将集合 nums 分成了满足条件的 A 和 B 这两个子集合，它们必然满足下面两个条件：
+
+ sum(A) = sum(B)
+ sum(A) + sum(B) = sum(nums)
+
+使用前一个公式将后一个等式中的B替换为A，可得：
+
+sum(A) = sum(nums)/2 
+
+我们可以发现，这道题已经转化成了我们之前所讨论的部分和的问题了。
+
+现在我们所要求解的是：是否能够从一个给定的数的集合选出一个子集合，这个子集合中元素的和为该集合中全部元素和的一半。
+当然如果整个集合中所有元素的和为奇数的话，这个子集合肯定不存在。可以对这个条件提前进行判断，以减少不必要的计算。
+
+如果整个集合中所有元素的和的一半为偶数的话，就需要使用动态规划方法来判断是否能够找到这样的子集合。
+为了使用动态规划方法，我们构造了一个数组称为 oldp，其表示对于已经遍历过的数字，是否能在它们中找到所有元素的和等于该索引值的子集合。
++ 初始化：在第一次迭代之前，只有索引为0的位置的值为True，其余均为False，条件为真。
++ 保持：当遍历第i个数时，当且仅当j之前就能被部分和所表示或者j-i能被表示时，该遍历完成后j能被表示。
++ 终止：oldp 中各个索引的值表示是否能用所给的数组的部分和来表示。
+
+因此在完成所有数值的循环后，只需要查看索引为 half 的 oldp 即可知道是否能将整个数组分为两个元素和相等的集合。
+#+BEGIN_SRC python
+  def canPartition(self, nums):
+      """
+      :type nums: List[int]
+      :rtype: bool
+      """
+      sums = sum(nums)
+      if sums % 2 == 1:
+          return False
+
+      half = sums / 2
+      oldp = [False] * (half + 1)
+      oldp[0] = True
+
+      for i in nums:
+          for j in range(half, i-1, -1):
+              oldp[j] = oldp[j] or oldp[j-i]
+
+      return oldp[half]
+#+END_SRC
+* Target Sum 
+#+BEGIN_EXAMPLE
+ You are given a list of non-negative integers, a1, a2, ..., an, and a target, S. Now you have 2 symbols + and -. For each integer, you should choose one from + and - as its new symbol.
+
+Find out how many ways to assign symbols to make sum of integers equal to target S. 
+#+END_EXAMPLE
+
+这道题目看起来和上一个题目相差很大，但是如果我们对题目所给的条件做一些适当的数学变化的话，
+就会发现这道题目本质上也是个部分和的问题。
+
+首先我们假设在这个集合中，正的子集合为P，负的为N。
+然后我们就可以使用这两个符号将题目所包含的关系给表示出来：
+
+sum(P) + sum(N) = sum(nums)
+
+sum(P) - sum(N) = S
+
+将这两个等式组合一下之后，我们可以发现该问题已经转换为部分和的问题了:
+
+sum(P) = (sum(nums) + S)/2
+
+这里一个比较大的不同就是：这个问题所求的是有多少种不同的部分和的结果和目标值相同，而上一题仅仅需要知道是否存在和目标值的部分和。
+所以在这里，我们的 dp 表示的是存在多少种不同的部分和可以表示该索引值，此时的内层递推公式也相应的改成了:
+
+dp[j] += dp[j-1]
+#+BEGIN_SRC python
+  def findTargetSumWays(self, nums, S):
+      """
+      :type nums: List[int]
+      :type S: int
+      :rtype: int
+      """
+      target = sum(nums) + S
+      if S > sum(nums) or target % 2:
+          return 0
+      else:
+          target = target/2
+
+      dp = [0] * (target+1)
+      dp[0] = 1
+      for i in nums:
+          for j in reversed(range(i, target+1)):
+              dp[j] += dp[j-i]
+      return dp[target]
+#+END_SRC
+* Combination Sum IV 
+#+BEGIN_EXAMPLE
+Given an integer array with all positive numbers and no duplicates, find the number of possible combinations that add up to a positive integer target.
+#+END_EXAMPLE
+
+需要注意的是，在这个题目中数组中的每个数字都可以使用多次，而不是像之前的题目所要求的只能使用一次。
+为了能够满足这个条件，我们可以从1开始一直到目标值，依次尝试是否能够使用数组中的数来累加到所尝试的索引值。
+因为数组中的数是大于等于1的，而我们对部分和目标值的搜索跨度为1，所以使用这种方法必定是不会错过数组集合中所有数值的任何一种可能的组合的。
+#+BEGIN_SRC python
+  def combinationSum4(self, nums, target):
+      """
+      :type nums: List[int]
+      :type target: int
+      :rtype: int
+      """
+      d = [0] * (target+1)
+      d[0] = 1
+      for i in range(1,target+1):
+          for j in nums:
+              if i >= j:
+                  d[i] += d[i-j]
+      return d[target]
+#+END_SRC

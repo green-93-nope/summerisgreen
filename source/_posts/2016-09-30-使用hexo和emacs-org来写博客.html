@@ -10,159 +10,18 @@ tags:
 published: true
 comments: 
 ---
-<p>
-经过一段时间的纠结，终于再次下定决心开通博客。
-这次决定要开始写博客，主要是因为发现自己在过去的一年内虽然看了很多书，但绝大部分的内容却都又被遗忘了。
-而剩下的那部分知识仔细回想起来也都觉得是非常混乱而且肤浅的。
-所以想要通过&lt;The Craft of Research&gt;中所提倡的以书面形式思考来改善自己的知识体系管理和思维深度。
-</p>
 
-<p>
-写博客就是自己以书面形式思考的一部分，因为未来准备成为一名程序员，所以期望自己的博客除了平常的读书感悟外还能有如下的内容：
-</p>
-<ul class="org-ul">
-<li>分享一些优秀的技术工具及配置</li>
-<li>编程方面的心得</li>
-<li>一些体系知识的整理</li>
-</ul>
-
-<div id="outline-container-org779b7f1" class="outline-2">
-<h2 id="org779b7f1">部署博客网站</h2>
-<div class="outline-text-2" id="text-org779b7f1">
-<p>
-对于博客的部署采用目前最流行的Github Pages + Hexo的组合。
-这种方法有着免费、简单、主题多、网上教程多等众多优点，而且遇到问题随时可以google到解决方案，
-作为一个简单省心的博客来说，是再好不过的选择了。
-</p>
-
-<p>
-具体的博客部署可以分为购买域名，绑定域名到Github Page，和使用Hexo部署博客三个步骤来进行。
-</p>
-</div>
-
-<div id="outline-container-org9f8c3e0" class="outline-3">
-<h3 id="org9f8c3e0">购买域名</h3>
-<div class="outline-text-3" id="text-org9f8c3e0">
-<p>
-作为一个自己搭建的博客网站怎么能没有自己的域名呢。
-域名的话一般在godaddy上购买，购买前可以提前搜下优惠码，大约能打个6到7折的样子。
-</p>
-</div>
-</div>
-
-<div id="outline-container-org7869c40" class="outline-3">
-<h3 id="org7869c40">绑定域名到Github Page</h3>
-<div class="outline-text-3" id="text-org7869c40">
-<p>
-在博客部署过程中最重要的一步就是绑定域名到Github Page上。
-在你完成了域名的绑定之后，只要别人在浏览器中输入你的域名，比如:www.baidu.com，
-就可以获取到你的网页服务也就是显示出你的博客来。只有这样你所选择的域名才真正属于你。
-</p>
-
-<p>
-这整个过程可以分为两个步骤来完成：
-</p>
-</div>
-
-<div id="outline-container-org55c9ad9" class="outline-4">
-<h4 id="org55c9ad9">申请Github Pages的空间</h4>
-<div class="outline-text-4" id="text-org55c9ad9">
-<p>
-个人或者项目主页的仓库的命名是有固定的要求的，必须命名为username.github.io。
-为了在别人向github网站请求你的服务时github能够回应你的服务内容，
-你需要向github注册你的服务名称，也就是域名。
-方法是在主目录建立一个有且仅有你的域名名称的CNAME文件来进行说明。
-</p>
-</div>
-</div>
-
-<div id="outline-container-orgfa83a67" class="outline-4">
-<h4 id="orgfa83a67">dns设置</h4>
-<div class="outline-text-4" id="text-orgfa83a67">
-<p>
-在有了网页的服务之后，还欠缺的一项服务就是dns服务。
-也就是如何引导访问你域名的请求到达你的服务器，在这里就是github page的服务器地址。
-</p>
-
-<p>
-简单的做法是直接在godaddy中进行dns的详细设置，不过因为一些大家都懂的原因，
-godaddy的dns服务经常会碰到在国内被屏蔽而无法访问的情况。
-所以这里需要使用第三方dns来进行解析，一般推荐是使用免费而又快速的dnspod。
-</p>
-</div>
-
-<ul class="org-ul"><li><a id="org50d87cf"></a>godaddy修改NS记录<br /><div class="outline-text-5" id="text-org50d87cf">
-<p>
-为了使用第三方的dns服务，还需要在godaddy中添加如下的NameService记录：
-</p>
-
-<p>
-f1g1ns1.dnspod.net，f1g1ns2.dnspod.net。
-</p>
-
-<p>
-这样别人向高级域名服务器（godaddy的dns服务器）请求你的服务时，就可以获得dnspod的dns服务器的地址了。
-</p>
-</div></li>
-
-<li><a id="org246978e"></a>dnspod进行dns设置<br /><div class="outline-text-5" id="text-org246978e">
-<p>
-最后只要再对dnspod进行些设置就可以完成域名访问请求从dnspod到github page的引导。
-</p>
-
-<p>
-这一步也是非常简单，注册完成后添加你的需要解析的博客域名
-</p>
-
-<p>
-之后先添加下面两个github pages的ip地址作为A记录。
-</p>
-
-<p>
-192.30.252.153，192.30.252.154
-</p>
-
-<p>
-然后再添加你的github page的仓库名作为CNAME记录即可。
-</p>
-</div></li></ul>
-</div>
-</div>
-
-<div id="outline-container-org574949d" class="outline-3">
-<h3 id="org574949d">使用Hexo部署博客</h3>
-<div class="outline-text-3" id="text-org574949d">
-<p>
-之前已经完成了博客网站的初步准备工作，接下来就可以使用博客框架来进行博客的快速部署了。
-</p>
-
-<p>
-之所以选用Hexo来作为博客框架，是因为它使用简单，而且还拥有非常丰富的主题资源。
-</p>
-
-<p>
-在这里还会碰到的一个小问题就是每次重新生成静态文件并部署了之后，根目录下的CNAME文件都会消失。
-这个只需要在source文件夹中添加相应的CNAME文件即可解决。
-</p>
-
-<p>
-在使用nodejs安装了hexo之后，就可以通过简单的命令来进行启动服务器或者部署博客这些常用的操作。
-具体的命令可以参考<a href="https://hexo.io/zh-cn/docs/commands.html">hexo文档</a>。
-</p>
-</div>
-</div>
-</div>
 
 <div id="outline-container-orgc80d512" class="outline-2">
 <h2 id="orgc80d512">使用org-mode来写博客</h2>
 <div class="outline-text-2" id="text-orgc80d512">
 <p>
-因为现在流行的博客框架包括hexo都是以markdown作为默认文本格式的。
-如果直接添加org文本的话，格式解析是不匹配的，所以需要通过一些方法来将org文本直接解析为html格式。
-</p>
-
-<p>
-google了下发现org-octopress这个插件来完成这个需求了，emacs丰富的插件果然没有让我失望。
+最近闲着部署了一个静态博客，开启了自己的博客生涯，
+采用的方案是目前最流行的 Github Pages + Hexo 。
+使用 Hexo 博客框架可以方便快捷地完成部署，发布的功能，不过其只默认支持解析 markdown 格式的文章。
+作为一个 emacs 用户，习惯于使用功能变态级强大的 org-mode 来写文档，自然也想要让自己的博客能够直接支持解析 org 格式文件。
+对于这项任务，google了下发现已经有人做了 org-octopress 这个插件来支持 org-mode 写博客，
+emacs 丰富的开源插件果然是很强大。
 </p>
 </div>
 
@@ -170,22 +29,41 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 <h3 id="orgaad4fb4">配置org-octopress</h3>
 <div class="outline-text-3" id="text-orgaad4fb4">
 <p>
-从Melpa中安装了org-octopress之后，添加下面的代码作为你的文章发布的基础设置。
+为了配置该功能，首先从Melpa软件仓库中安装org-octopress，并添加下面的代码设置你的文章发布功能。
 </p>
 
 <div class="org-src-container">
 <pre class="src src-elisp"><span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">require</span> '<span style="color: #a45bad;">org-octopress</span><span style="color: #4f97d7;">)</span>
-<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-top       <span style="color: #2d9574;">"~/Hexo"</span><span style="color: #4f97d7;">)</span>
-<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-posts     <span style="color: #2d9574;">"~/Hexo/source/_posts"</span><span style="color: #4f97d7;">)</span> <span style="color: #2aa1ae; background-color: #292e34;">;</span><span style="color: #2aa1ae; background-color: #292e34;">&#25991;&#31456;&#21457;&#24067;&#30446;&#24405;</span>
-<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-org-top   <span style="color: #2d9574;">"~/Hexo"</span><span style="color: #4f97d7;">)</span>
-<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-org-posts <span style="color: #2d9574;">"~/Hexo/blog"</span><span style="color: #4f97d7;">)</span> <span style="color: #2aa1ae; background-color: #292e34;">;</span><span style="color: #2aa1ae; background-color: #292e34;">org&#25991;&#31456;&#30446;&#24405;</span>
-<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-setup-file          <span style="color: #2d9574;">"~/Hexo/setupfile.org"</span><span style="color: #4f97d7;">)</span>
+<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-top       <span style="color: #2d9574;">"~/YourBlogDirectory"</span><span style="color: #4f97d7;">)</span>
+<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-posts     <span style="color: #2d9574;">"~/YourBlogDirectory/source/_posts"</span><span style="color: #4f97d7;">)</span> <span style="color: #2aa1ae; background-color: #292e34;">;</span><span style="color: #2aa1ae; background-color: #292e34;">&#25991;&#31456;&#21457;&#24067;&#30446;&#24405;</span>
+<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-org-top   <span style="color: #2d9574;">"~/YourBlogDirectory"</span><span style="color: #4f97d7;">)</span>
+<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-directory-org-posts <span style="color: #2d9574;">"~/YourBlogDirectory/blog"</span><span style="color: #4f97d7;">)</span> <span style="color: #2aa1ae; background-color: #292e34;">;</span><span style="color: #2aa1ae; background-color: #292e34;">org&#25991;&#31456;&#30446;&#24405;</span>
+<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">setq</span> org-octopress-setup-file          <span style="color: #2d9574;">"~/YourBlogDirectory/setupfile.org"</span><span style="color: #4f97d7;">)</span>
 
 </pre>
 </div>
 
 <p>
-之后就可以使用C-c C-e P 来使用octopress输出为你的Hexo博客文章。
+其中的具体目录可以依据自己的实际情况进行修改，
+在这里 top 指定的是博客的根目录；posts 为发布成 html 格式的文章所在的目录；
+org-posts 为你使用 org 模式写的博客所在的目录；
+org-top 为 org 博客的上一级别目录。
+</p>
+
+<p>
+完成了之前的设定之后，你需要修改博客目录下的 _config.yml，以便适配 org-octopress 解析成的 html 博客文件：
+</p>
+<pre class="example">
+permalink: /blog/:year-:month-:day-:title.html
+</pre>
+
+<p>
+接下来，你就可以使用 org-octopress 功能，此时会进入一个博客文章管理的 buffer，在这里面可以轻松地添加、修改或删除博客文章。
+</p>
+
+<p>
+最后，当你写完博客以后，org-export-dispatch 中的 Publish 选项中来选择导出当前的博客文章或者整个 octopress 工程。
+如果你想要预览你的文章的效果，你可以使用 prodigy 来快速查看，具体配置及使用可见 <a href="#org54fcaf6">下一章节</a>。
 </p>
 </div>
 </div>
@@ -194,8 +72,8 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 <h3 id="orge1c7d63">org博客中引用图片</h3>
 <div class="outline-text-3" id="text-orge1c7d63">
 <p>
-使用org-mode来写博客还需要解决的一个问题就是文章中引用图片的问题。
-解决方法是在emacs的配置文件中加入下面的代码：
+为了避免在 org-mode 输出为 html 的过程中，图片引用路径产生问题，
+需要在 emacs 的配置文件中加入下面的代码来在 org-mode 中注册一种新的图片引用格式。
 </p>
 <div class="org-src-container">
 <pre class="src src-elisp"><span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">require</span> '<span style="color: #a45bad;">ox-publish</span><span style="color: #4f97d7;">)</span>
@@ -212,7 +90,8 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 </pre>
 </div>
 <p>
-之后引用的图片无论是在本地服务器中还是在部署的博客网站中都能很好的显示。
+这两个路径所代表的图片存储位置分别是从 org 格式的文章所在的目录和 web 服务器的角度来看的。
+如果使用该种配置方式，为了方便引用，建议将图片保存在 source 文件夹中。
 </p>
 </div>
 </div>
@@ -222,9 +101,10 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 <h2 id="org64468c9">在emacs中启动服务器和部署博客</h2>
 <div class="outline-text-2" id="text-org64468c9">
 <p>
-在emacs中启动外部服务的任务可以通过Prodigy这个插件提供的功能完成。
-在Melpa中安装了该插件之后，添加下面的代码到你的配置文件后，就可以通过M-x
- prodigy来启动相应的服务了。
+<a id="org54fcaf6"></a>
+在 emacs 中启动外部服务的任务可以通过 Prodigy 这个插件提供的功能完成。
+在 Melpa 中安装了该插件之后，添加下面的代码到你的配置文件后，就可以使用
+ prodigy 来快速地进行本地调试(Hexo Server）和部署（Hexo Deploy）。
 </p>
 
 <div class="org-src-container">
@@ -232,7 +112,7 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
  <span style="color: #4f97d7;">:name</span> <span style="color: #2d9574;">"Hexo Server"</span>
  <span style="color: #4f97d7;">:command</span> <span style="color: #2d9574;">"hexo"</span>
  <span style="color: #4f97d7;">:args</span> '<span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">"server"</span><span style="color: #bc6ec5;">)</span>
- <span style="color: #4f97d7;">:cwd</span> <span style="color: #2d9574;">"~/Hexo"</span>
+ <span style="color: #4f97d7;">:cwd</span> <span style="color: #2d9574;">"~/YourBlogDirectory"</span>
  <span style="color: #4f97d7;">:tags</span> '<span style="color: #bc6ec5;">(</span>hexo server<span style="color: #bc6ec5;">)</span>
  <span style="color: #4f97d7;">:kill-signal</span> 'sigkill
  <span style="color: #4f97d7;">:kill-process-buffer-on-stop</span> t<span style="color: #4f97d7;">)</span>
@@ -241,7 +121,7 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
  <span style="color: #4f97d7;">:name</span> <span style="color: #2d9574;">"Hexo Deploy"</span>
  <span style="color: #4f97d7;">:command</span> <span style="color: #2d9574;">"hexo"</span>
  <span style="color: #4f97d7;">:args</span> '<span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">"deploy"</span> <span style="color: #2d9574;">"--generate"</span><span style="color: #bc6ec5;">)</span>
- <span style="color: #4f97d7;">:cwd</span> <span style="color: #2d9574;">"~/Hexo"</span>
+ <span style="color: #4f97d7;">:cwd</span> <span style="color: #2d9574;">"~/YourBlogDirectory"</span>
  <span style="color: #4f97d7;">:tags</span> '<span style="color: #bc6ec5;">(</span>hexo deploy<span style="color: #bc6ec5;">)</span>
  <span style="color: #4f97d7;">:kill-signal</span> 'sigkill
  <span style="color: #4f97d7;">:kill-process-buffer-on-stop</span> t<span style="color: #4f97d7;">)</span>
@@ -249,8 +129,8 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 </div>
 
 <p>
-你可以通过s来启动所选服务，使用S来停止对应的服务，
-该模式的详细的快捷键定义在prodigy-mode-map中，不过知道这两个就应该够用了。
+在 prodigy 模式下你可以通过s来启动所选服务，使用S来停止对应的服务，
+该模式的详细的快捷键定义在 prodigy-mode-map 中，不过知道这两个就应该够用了。
 </p>
 </div>
 </div>
@@ -259,19 +139,15 @@ google了下发现org-octopress这个插件来完成这个需求了，emacs丰�
 <h2 id="orgc4b3de7">参考</h2>
 <div class="outline-text-2" id="text-orgc4b3de7">
 <p>
-1.<a href="http://cnfeat.com/blog/2014/05/10/how-to-build-a-blog/">如何搭建一个独立博客——简明 Github Pages与 jekyll 教程</a>
+1.<a href="https://zilongshanren.com/blog/2015-07-19-add-org-mode-support.html">使用 Org-mode 来写博客</a>
 </p>
 
 <p>
-2.<a href="https://zilongshanren.com/blog/2015-07-19-add-org-mode-support.html">使用 Org-mode 来写博客</a>
+2.<a href="https://zilongshanren.com/blog/2015-08-02-migrate-blog-to-hexo.html">迁移博客到 Hexo</a>
 </p>
 
 <p>
-3.<a href="https://zilongshanren.com/blog/2015-08-02-migrate-blog-to-hexo.html">迁移博客到 Hexo</a>
-</p>
-
-<p>
-4.<a href="http://stackoverflow.com/questions/14684263/how-to-org-mode-image-absolute-path-of-export-html">how to org mode image absolute path of export html</a>
+3.<a href="http://stackoverflow.com/questions/14684263/how-to-org-mode-image-absolute-path-of-export-html">how to org mode image absolute path of export html</a>
 </p>
 </div>
 </div>

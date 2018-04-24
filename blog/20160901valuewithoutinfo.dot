@@ -1,8 +1,0 @@
-graph g {
-U[shape="box"];
-"-$100"[style="filled" color="yellow"];
-U -- "-$100"[label="Rent"];
-"-$100" -- "$500"[label="Cash back with 0.4 chance"];
-"-$100" -- "-$500"[label="No Cash back with 0.6 chance"];
-U -- "$0"[label="Buy car"];
-}

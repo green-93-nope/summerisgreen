@@ -1,0 +1,170 @@
+#+TITLE: 算法技巧-backtracking
+#+DATE: 2017-07-07
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: 编程技巧
+#+JEKYLL_TAGS: 编程技巧 算法
+#+JEKYLL_PUBLISHED: true
+
+* Backtracking 算法
+Backtracking（回溯)法是一个实用性非常强的算法，
+它的核心思想正如其名字所蕴含的意思：沿着之前走的路退回到上一个岔路口，然后选择另一条路继续探索。
+除了回溯思想之外，该算法的另一个关键就是对何时进行回溯，何时结束算法进行判断，而对这个的具体实现又是和所遇到的问题相关联。
+
+将这两个关键点结合起来之后，我们可以得到回溯算法的一个非形式化的描述：
+在搜索过程中，按照自定义的规则在遭遇的分支中进行选择；当所选择的分支为不可行(或者已被完全搜索时)，退回到上一个分支的分叉点，并在未被选取过的分支中选择一个，然后继续搜索。
+
+回溯算法不仅原理简单，而且应用十分广泛。
+该算法最常见的一种变体就是十分有名的在图或树中寻找可行解的深度优先搜索算法(Depth First Search)。
+
+回溯算法算法应用广泛的一个原因就是其可以针对不同形式的解来做适当的变形，
+以进行求解。
+回溯算法对于具有不同解的形式的问题的求解思路将在下面一一介绍。
+* 回溯算法的应用
+在对回溯算法的实际编码过程中，由于递归调用的存在，可以很优雅的方式将回溯算法表示出来，而不需要实现复杂的回撤操作。
+
+回溯算法最常见的应用是用来在有限的搜索集中寻找下面三种形式的解：
++ 可行解
++ 最优解
++ 所有解
+
+对于前两类问题，它们的问题形式比较固定，其求解过程直接套用下面介绍的思路即可。
+而对查找所有可行解的问题，由于通常会需要去除冗余解并对求解过程进行加速，需要针对具体的需求进行适当的变形。
+** 可行解思路
+#+BEGIN_SRC python
+  def solve(node, path):
+      path += [node]
+      if leave?(node):
+          return path if satisfy?(path) else None
+
+      for c in choice(node):
+          ans = solve(c, path)
+          if ans is not None:
+              return ans
+
+      return None
+#+END_SRC
+
+** 最优解思路
+#+BEGIN_SRC python
+  best = -float("inf")
+
+  def find_best(node, path):
+      path += [node]
+      if leave?(node):
+          if satisfy?(path):
+              best = max(best, score(node))
+
+          return
+
+      for c in choice(node):
+          find_best(c, path)
+
+#+END_SRC
+
+** 寻找存在的所有解
+#+BEGIN_SRC python
+  ans = []
+
+  def find_all(node, path):
+      path += node
+      if leave?(node):
+          if satisfy?(path):
+              ans += path
+
+          return
+
+      for c in choice(node):
+          find_all(c, path)
+
+#+END_SRC
+
+对于寻找存在的所有解的问题，一般不仅需要找到所有解，还要求找到的解不能重复;
+为了满足这个需求需要增加一些额外的操作，具体将结合下面这个来自 leetcode 的题目进行说明。
+*** Combination Sum II
+#+BEGIN_EXAMPLE
+  Given a collection of candidate numbers (C) and a target number (T), find all unique combinations in C where the candidate numbers sums to T.
+
+  Each number in C may only be used once in the combination. 
+#+END_EXAMPLE
+
+该题目的难点就是如何高效地找出所有不重复的结果。
+
+首先需要做的是对整个原始数据进行排序，
+因为这用可以方便后面过滤掉重复的结果，并且可以使得后续的运算时间减少一个常数因子（为之前的几分之一）。
+而这个方法对整个程序的时间效率的影响不大，对候选对象的排序的时间复杂度为 O(n * lg(n))
+和整个搜索过程的时间复杂度(O(n^2))不是一个量级上的。
+
+在之前的解算思路上还添加了 e <= target and (i < 1 or candidates[i] != candidates[i-1]) 这个判定条件。
+这个条件的前面部分减少了搜索的计算量，后面部分则在当前分叉点上跳过与之前相同的选择保证了搜索结果的不重复。
+
+搜索结果的不重复性可以通过对递归式 csIter 进行循环不变式分析来证明。
+
++ 循环不变式：相同长度的 comb ，其值不相同。
++ 初始化：第一次迭代之前，长度为0的 comb，不包含任何值。成立。
++ 保持：假设当 comb 中元素个数为 n 时，之前计算出的 comb 不重复，对于满足条件 i < 1 or candidates[i] != candidates[i-1] 的结果，其添加的新元素能保证新的 comb 不重复。因此完成此步添加操作的 comb不会产生重复。
++ 终止：当循环终止时，长度相同的 comb 中的值不同。
+
+所以对于最终结果中的解，不是不同的长度的值，要不就是相同的长度但不重复的值，所以其结果必然不重复。
+
+看了上面的推理，对于重复性的问题应该是解决了，但是可能会引发另一个担忧：过滤掉了这些条件，会不会导致最终的结果不完整。
+为了消除这个疑虑，只要证明过滤掉的搜索结果都是在现有结果中已有的即可。
+对于去除的元素，其满足下面的条件：i > 0 并且 candidates[i] == candidates[i-1]。
+也就是说去除的潜在对象是作为新符合条件的候选项，已经在子程序中添加过到 comb 中的。
+而当前的 comb 和前一个潜在对象的时候相同，并且当前的潜在对象是之前的潜在对象的子集，
+因此该条件下产生的结果是之前的结果的子集。
+所有过滤掉判定条件之后的结果依然是完整的。
+#+BEGIN_SRC python
+  def combinationSum2(self, candidates, target):
+      """
+      :type candidates: List[int]
+      :type target: int
+      :rtype: List[List[int]]
+      """
+      ans = []
+      def csIter(candidates, target, comb):
+          if target == 0:
+              ans.append([i for i in comb])
+          for i, e in enumerate(candidates):
+              if e <= target and (i < 1 or candidates[i] != candidates[i-1]):
+                  comb.append(e)
+                  csIter(candidates[i+1:], target-e, comb)
+                  comb.pop()
+      csIter(sorted(candidates), target, [])
+      return ans
+#+END_SRC
+
+在 leetcode 上的另一个中档难度的题可以采用和本题相同的技巧来解决，其问题及解法如下所示。
+
+*** Subsets II
+#+BEGIN_EXAMPLE
+  Given a collection of integers that might contain duplicates, nums, return all possible subsets. 
+#+END_EXAMPLE
+
+该题目除了没有了 target 目标的约束之外，和之前的题目类似。
+在实际求解的过程中，只要将之前的解放中和 target 相关的表达式删去即可。
+
+#+BEGIN_SRC python
+  def subsetsWithDup(self, nums):
+      """
+      :type nums: List[int]
+      :rtype: List[List[int]]
+      """
+      ans = []
+
+      def swdIter(candidates, comb):
+          ans.append([i for i in comb])
+
+          for i, e in enumerate(candidates):
+              if i < 1 or candidates[i] != candidates[i-1]:
+                  comb.append(e)
+                  swdIter(candidates[i+1:], comb)
+                  comb.pop()
+      swdIter(sorted(nums), [])
+      return ans
+#+END_SRC
+
+* 参考
+1. [[https://segmentfault.com/a/1190000006121957][(Leetcode) Backtracking回溯法(又称DFS,递归)全解]]
+2. [[https://leetcode.com/problems/combination-sum-ii/#/description][leetcode Combination Sum II]]
+3. [[https://leetcode.com/problems/subsets-ii/#/description][leetcode Subsets II]]

@@ -3,7 +3,7 @@
 #+SETUPFILE: ~/Hexo/setupfile.org
 #+JEKYLL_LAYOUT: post
 #+JEKYLL_CATEGORIES: 编程技巧
-#+JEKYLL_TAGS: 编程技巧
+#+JEKYLL_TAGS: 编程技巧 算法
 #+JEKYLL_PUBLISHED: true
 
 异或操作看似是数字逻辑的一个很简单的运算方法，
@@ -49,7 +49,7 @@ a = a^b
 比如下面将会介绍的用来在一组数中找出唯一一个只出现了奇数次的数字这一系列问题。
 
 ** 校招之找出未打卡员工题
-今天看到的是一道可以使用该种方法的很简单的校招笔试题目。
+某互联网公司的一道很简单的校招笔试题目，使用异或可以很优雅地解决。
 
 #+BEGIN_EXAMPLE
 题目：输入两行数据，第一行为全部员工的 id，第二行为某一天打卡的员工 id，
@@ -64,7 +64,7 @@ a = a^b
 #+END_EXAMPLE
 
 ** leetcode之Single Number III
-之前在leetcode上也看到过一个使用异或方法将会非常简单的题目，时间和空间复杂度分别为O(n)和O(1)。
+之前在leetcode上也看到过一个使用异或方法来解决将会变得非常简单的一道题目，其最终的时间和空间复杂度分别为O(n)和O(1)。
 
 #+BEGIN_EXAMPLE
 Given an array of numbers nums,

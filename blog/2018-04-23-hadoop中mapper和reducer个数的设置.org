@@ -1,0 +1,67 @@
+#+TITLE: Hadoop中的Mapper和Reducer数量设定
+#+DATE: 2018-04-23
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: 大数据
+#+JEKYLL_TAGS: 大数据 Hadoop
+#+JEKYLL_PUBLISHED: true
+
+{{{
+为了更加方便地对T级别的大数据进行批量处理，Hadoop提供了MapReduce这个编程范式。
+MapReduce基于分而治冶的思想，将海量数据拆分为大量的小数据块，从而在多个节点并行处理海量数据，最后通过将结果合并以实现高效的批量处理。
+}}}
+
+在MapReduce框架中，输入数据被划分成等长的小数据块，称为输入分片(input split)。
+每个输入分片均会构建一个map任务以处理分片中的每条记录,排过序的处理结果通过网络传输发送到运行reduce任务的节点。
+reduce任务节点在复制完所有map输出后，将其按照排序顺序合并。
+最后，reduce任务通过运行用户自定义的reduce函数以完成MapReduce作业。
+
+* Mapper的数量设定
+为了使map任务获得最佳性能，Hadoop采用了“数据本地化优化”的策略。
+在application master为每个分片创建map作业的过程中，MapReduce框架优先选择存储有输入数据的节点来执行map任务。
+当所有存储该分片数据的节点均在执行map任务时，作业调度会尝试从数据块所在机架上的其他节点寻找空闲的map槽，
+只有当无法在当前机架运行map任务时才在其他机架创建map作业。
+因为与跨机架的数据传输相比，位于同一机架上的两个数据节点将有更高的带宽和更低的延迟响应。
+
+此外，为了防止任务启动所花费的时间在整个作业的执行时间中占比较大，从而导致任务执行效率低下的问题，
+map任务最好拥有一分钟以上的运行时间，
+与Reducer不同，无法通过直接设置Mapper的个数来调节Mapper的运行时间，而需要通过设定分片大小来间接调整Mapper的个数。
+
+MapReduce框架的输入数据分片是由InputFormat接口来完成的。
+在大数据分析中，文件是最常见的一种数据源格式，
+它们均采用FileInputFormat作为其数据源InputFormat实现的基类。
+FileInputFormat提供了三个属性参数来控制实际的分片大小：mapreduce.input.fileinputformat.split.minsize, mapreduce.input.fileinputformat.split.maxsize以及dfs.blocksize。
+这三个参数分别表示一个文件分片最小的有效字节数、最大字节数以及HDFS中块的大小。
+利用公式splitSize = max(minimumSize, min(maximumSize, blockSize))，可以通过改变上述三个参数来调节最终的分片大小。
+在调节分片大小时需要防止分片切分过小，从而导致管理分片的总时间和构建map任务的总时间将决定作业的整个执行时间。
+同时分片大小也不应大于块大小，因为此时无法确保存储有该切片的多个数据块位于单个节点中，从而增加了执行map任务中的网络传输。
+因此对于大多数作业来说，一个合理的分片大小趋向于HDFS的一个块的大小，默认是128MB。
+
+需要注意的是，
+由于数据分片对有效字节数小于maximumSize的文件并不进行拆分，并且进行拆分的大文件的大小并非恰好为文件块大小的倍数，因此分片大小并不确定。
+为了最小化运行时间，Hadoop采用了类似贪心算法的策略来优先处理最大的分片。
+分片大小的信息和指向分片数据的引用均包含在输入分片中，供application master使用。
+
+另一个会影响Mapper个数的参数是mapred.jobtracker.maxtasks.per.job，不过其只能限制每个job中能够并发运行的map或reduce任务的上限。
+
+* Reducer的数量设定
+Reducer的个数是由用户独立设置的，在默认情况下只有一个Reducer。
+它的个数既可以使用命令行参数设置（mapreduce.job.reduces=number），也可以在程序中制定（job.setNumReduceTasks(number)）。
+虽然用户可以很方便地对Reducer的个数进行修改，但在设置的过程中却要在较高的Reducer数量带来的小文件过多的问题，与较低的Reducer数量带来的整体Reduce过程过长、负载不均衡以及失败率较大的不足之间进行权衡。
+
+为了更加高效地完成reduce任务，Reducer的个数需要依据自己的任务特点和机器负载情况进行选择。
+Hadoop权威指南给出的一条经验法则是：目标Reducer保持在每个运行5分钟左右，且产生至少一个HDFS块的输出。
+而Apache的MapReduce官方教程中给出的建议是：Reducer个数应该设置为0.95或者1.75乘以节点数与每个节点的容器数的乘积。
+当乘数为0.95时，map任务结束后所有的reduce将会立刻启动并开始转移数据，
+此时队列中无等待任务，该设置适合reudce任务执行时间短或者reduce任务在个节点的执行时间相差不大的情况；
+当乘数为1.75时，运行较快的节点将在完成第一轮reduce任务后，可以立即从队列中取出新的reduce任务执行，
+由于该reduce个数设置方法减轻了单个reduce任务的负载，并且运行较快的节点将执行新的reduce任务而非空等执行较慢的节点，其拥有更好的负载均衡特性。
+
+* 参考
+[[https://book.douban.com/subject/27115351/][Hadoop权威指南]]
+
+[[https://hadoop.apache.org/docs/current/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html#Reducer][MapReduce Tutorial]]
+
+[[https://stackoverflow.com/questions/21980110/what-is-ideal-number-of-reducers-on-hadoop][What is Ideal number of reducers on Hadoop?]]
+
+[[https://stackoverflow.com/questions/20818370/how-to-set-the-number-of-mappers-in-new-hadoop-api][How to set the number of mappers in new Hadoop api?]]
