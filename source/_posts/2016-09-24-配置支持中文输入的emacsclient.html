@@ -19,9 +19,9 @@ comments:
 并且通过一些额外的设置可以很好地支持中文输入。
 </p>
 
-<div id="outline-container-org03ed370" class="outline-2">
-<h2 id="org03ed370">emacsclient</h2>
-<div class="outline-text-2" id="text-org03ed370">
+<div id="outline-container-orga6d1c8e" class="outline-2">
+<h2 id="orga6d1c8e">emacsclient</h2>
+<div class="outline-text-2" id="text-orga6d1c8e">
 <p>
 emacsclient 的原理十分简单，就是预先启动一个emacs作为守护进程，每次想要进行一个新的编辑时，就打开一个窗口并链接到守护进程。
 这样就免去了最耗时的每次启动时的加载配置，十分快速的同时还拥有你自定义的配置。
@@ -48,9 +48,9 @@ $ emacsclient -nc -a <span style="color: #2d9574;">""</span>  <span style="color
 </div>
 </div>
 
-<div id="outline-container-org6d8c6e1" class="outline-2">
-<h2 id="org6d8c6e1">新窗口中支持中文字体</h2>
-<div class="outline-text-2" id="text-org6d8c6e1">
+<div id="outline-container-orge27db32" class="outline-2">
+<h2 id="orge27db32">新窗口中支持中文字体</h2>
+<div class="outline-text-2" id="text-orge27db32">
 <p>
 因为在 emacs 中关于界面和字体的设置只有在创建新的frame时才有效，而启动服务器的时候并没有创建frame。
 所以要想在 emacsclient 中正确的显示中文字体必须要添加一些额外的设置。
@@ -87,9 +87,9 @@ $ emacsclient -nc -a <span style="color: #2d9574;">""</span>  <span style="color
 </div>
 </div>
 
-<div id="outline-container-orgbc72cff" class="outline-2">
-<h2 id="orgbc72cff">用户环境变量配置</h2>
-<div class="outline-text-2" id="text-orgbc72cff">
+<div id="outline-container-org463cc01" class="outline-2">
+<h2 id="org463cc01">用户环境变量配置</h2>
+<div class="outline-text-2" id="text-org463cc01">
 <p>
 一般言系统环境中LC_CTYPE默认设置为英文，此时在Emacs上可能无法使用输入法。为了能够支持fcitx的输入，在启动Emacs时需要指定LC_CTYPE为zh_CN.UTF-8。
 使用下面的命令进行，就可以使用支持fcitx中文输入的emacs:
@@ -118,9 +118,9 @@ $ emacsclient -nc -a <span style="color: #2d9574;">""</span>  <span style="color
 </p>
 </div>
 </div>
-<div id="outline-container-org20f07f0" class="outline-2">
-<h2 id="org20f07f0">参考</h2>
-<div class="outline-text-2" id="text-org20f07f0">
+<div id="outline-container-org600526f" class="outline-2">
+<h2 id="org600526f">参考</h2>
+<div class="outline-text-2" id="text-org600526f">
 <p>
 1.<a href="https://wiki.archlinux.org/index.php/Emacs_(%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87)">Emacs&#x2013;archwiki</a>
 </p>

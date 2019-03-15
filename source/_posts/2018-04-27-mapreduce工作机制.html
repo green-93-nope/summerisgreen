@@ -1,0 +1,164 @@
+---
+title: "[PREVIEW] MapReduce中的shuffle和排序"
+date: 2018-04-28
+layout: post
+categories: 
+- 大数据
+tags: 
+- 大数据 
+- Hadoop
+published: false
+comments: 
+---
+<span style="background: red;">PREVIEW</span><p>
+用于大数据处理的MapReduce框架为了实现对T级别数据的高效处理，
+输入数据通常被拆分为大量的输入数据块，由Mapper并行处理这些数据块,
+map任务的结果将传输到reduce节点进行归纳处理。
+</p>
+
+<p>
+为了能够对所有包含相同键的键值对调用reduce函数生成最终的作业结果，
+需要使用Shuffle和排序操作来将Mapper的结果分发到相应的Reducer节点上。
+如图1所示，在MapReduce的所有过程中最为混乱也是最为神奇的就是Shuffle过程。
+</p>
+
+<p>
+为了更好地理解Shuffle和排序过程，首先来看一下它的目标，即Reducer的输入要求。
+每个reduce节点可以接收包含不同键的键值对，不过其需要
+partition和reducer的数量
+对于每个Reducer来说，其需要一系列键值对，它的键值对需要包含其所处理的键的所有Mapper生成的所有键值对。
+由于需要对不同键的键值对调用reduce函数，每个reduce任务所获取的键值对需要经过排序，
+通过判断下一个键是否和当前的不同，可以判断出哪些键值对属于同一个键的。
+排序提升了Reducer的效率，帮助它判断什么时候一个新的reduce任务应该开始。
+</p>
+
+<p>
+在MapReduce框架中，输入数据被划分成等长的小数据块，称为输入分片(input split)。
+每个输入分片均会构建一个map任务以处理分片中的每条记录,排过序的处理结果通过网络传输发送到运行reduce任务的节点。
+reduce任务节点在复制完所有map输出后，将其按照排序顺序合并。
+最后，reduce任务通过运行用户自定义的reduce函数以完成MapReduce作业。
+</p>
+
+<p>
+由于大数据本身的限制，Mapper的输出不会包含所有。
+由于Mapper依据顺序将输入文件进行处理（行），
+其中Mapper的结果都是
+Mapper的结果可能发送到不同的Reducer上，而不同Reducer的结果可能来自多个不同的Mapper。
+当输入数据在map阶段已经预先排好序了，在reduce阶段可以简单地将来自多个不同Mapper的数据归并排序。
+</p>
+
+<p>
+为了提升效率，Shuffle过程可以在map阶段结束之前就开始，
+</p>
+
+<p>
+对于Shuffle的具体介绍，可以分为map端对输出的处理和reduce端对输入的处理两个部分来进行介绍。
+</p>
+
+<p>
+每个数据块均有一个Mapper来以并行的方式进行处理。
+</p>
+<div id="outline-container-org7f14238" class="outline-2">
+<h2 id="org7f14238">map端</h2>
+<div class="outline-text-2" id="text-org7f14238">
+<p>
+当Mapper产生输出时，其利用缓冲的方式写到内存并出于效率的考虑进行预排序。
+每个map任务都有一个环形的内存缓冲区用于存储任务输出。
+一旦缓冲内容达到阈值(mapreduce.map.sort.spill.percent,默认为0.8)，一个后台线程开始把内容溢出(spill)到磁盘。
+在溢出写到磁盘过程中，map输出继续写到缓冲区，但如果在此期间缓冲区填满，map会被阻塞直到写磁盘过程完成。
+</p>
+
+<p>
+在写磁盘之前，线程首先根据最终要传的reducer把数据划分成相应的分区(partition)。
+在每个分区中，后台线程按键进行排序。如果指定combiner函数，其将在排序后的输出上运行。
+</p>
+
+<p>
+每次内存缓冲区达到阈值，就会新建一个溢出文件(spill file)。
+在任务完成之前，溢出文件被合并成一个已分区且已排序的输出文件。
+</p>
+
+<p>
+在将压缩map输出写到磁盘前对其进行压缩，可以节约磁盘空间，并且减少传给Reducer的数据量。
+对于Hadoop集群，在一般情况下，Mapper和Reducer是运行在不同的节点上的。
+此时Reducer需要跨节点去拉取Mapper的结果，从而造成了集群内严重的网络资源消耗，
+特别是当集群内运行的作业很多时，整个task的执行对于集群内部网络资源的消耗非常大。
+不过在默认情况中，输出是不压缩的，可以设置mapreduce.map.output.compress为true来启用压缩。
+</p>
+</div>
+</div>
+
+<div id="outline-container-org6afda3d" class="outline-2">
+<h2 id="org6afda3d">reduce端</h2>
+<div class="outline-text-2" id="text-org6afda3d">
+<p>
+map输出文件位于运行map任务的tasktracker的本地磁盘。
+reduce任务需要集群上若干个map任务的map输出作为其特殊的分区文件。
+每个map任务的完成时间可能不同，因此在每个任务完成时，reduce任务就开始复制其输出。
+reduce任务有少量复制线程，因此能够并行取得map输出。
+默认有5个复制线程，可通过mapreduce.reduce.shuffle.parallelcopies属性修改。
+</p>
+
+<p>
+如果map输出相当小，会被复制到reduce任务JVM的内存（缓冲区大小由mapreduce.reduce.shuffle.input.buffer.percent属性控制）,
+否则，map输出将被复制到磁盘上。一旦内存缓冲区达到阈值大小(mapreduce.reduce.shuffle.merge.percent)或达到map输出阈值（mapreduce.reduce.merge.inmem.threshold）。
+如果指定combiner函数，其将在合并期间运行它以降低磁盘的写入量。
+</p>
+
+<p>
+随着磁盘上的副本增多，后台线程会将它们合并为更大的、排好序的文件。这会为后面的合并节省一些时间。
+为了合并，压缩的map输出都必须在内存中解压缩。
+</p>
+
+<p>
+复制完map输出后，reduce任务进入排序阶段，这个阶段合并map输出，维持其顺序排序，这是循环进行的。
+</p>
+</div>
+</div>
+
+<div id="outline-container-org4fd1261" class="outline-2">
+<h2 id="org4fd1261">配置调优</h2>
+<div class="outline-text-2" id="text-org4fd1261">
+<p>
+总的原则是给shuffle过程尽量多提供内存空间。
+有一个平衡问题，也就是要确保map函数和reduce函数得到足够的内存来运行。
+</p>
+
+<p>
+运行map任务和reduce任务的JVM，其内存大小由mapred.child.java.opts属性设置。任务节点上的内存应该尽可能设置的大些。
+</p>
+
+<p>
+在map端，可以通过避免多次溢出写磁盘获得最佳性能。
+如果可以估算map输出大小，就可以合理地设置mapreduce.task.io.sort.*属性来尽可能减少溢出写的次数。
+MapReduce计数器计算在作业运行整个阶段中溢出写磁盘的记录数，这对于调优很有帮助。
+</p>
+
+<p>
+在reduce端，中间数据全部驻留在内存时，就能获得最佳内存。
+在默认情况下，不可能发生，因为所有内存一般都预留给reduce函数。
+但如果reduce函数的内存需求不大，把mapreduce.reduce.merge.inmum.threshold设置为0,mapreduce.reduce.input.buffer.percent设置为1.0（或一个更低的数值）就可以提升性能。
+</p>
+
+<p>
+更常见的情况是，Hadoop默认使用4KB的缓冲区，这是很低的，因此应该在集群中增加这个值。
+</p>
+</div>
+</div>
+
+<div id="outline-container-org7245fb5" class="outline-2">
+<h2 id="org7245fb5">参考</h2>
+<div class="outline-text-2" id="text-org7245fb5">
+<p>
+<a href="https://book.douban.com/subject/27115351/">Hadoop权威指南</a>
+</p>
+
+<p>
+<a href="https://stackoverflow.com/questions/22141631/what-is-the-purpose-of-shuffling-and-sorting-phase-in-the-reducer-in-map-reduce">What is the purpose of shuffling and sorting phase in the reducer in Map Reduce Programming?</a>
+</p>
+
+<p>
+<a href="http://matt33.com/2016/03/02/hadoop-shuffle/">MapReduce之Shuffle过程详述</a>
+</p>
+</div>
+</div>

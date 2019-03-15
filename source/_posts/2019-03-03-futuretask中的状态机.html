@@ -1,0 +1,188 @@
+---
+title: "FutureTask源码简析"
+date: 2019-03-03
+layout: post
+categories: 
+- java
+tags: 
+- java 
+- 源码
+published: true
+comments: 
+---
+<p>
+由于FutureTask可能在多个线程中触发执行或者取消逻辑,如果没有线程安全保证，
+可能会出现执行已取消操作，异步操作被多次执行等违反Futuretask语义的情形。
+为了保证FutureTask的线程安全，jdk结合使用了状态机和cas操作。
+</p>
+<div id="outline-container-org51394a9" class="outline-2">
+<h2 id="org51394a9">FutureTask中的状态机</h2>
+<div class="outline-text-2" id="text-org51394a9">
+</div>
+<div id="outline-container-org688eae3" class="outline-3">
+<h3 id="org688eae3">状态机设计</h3>
+<div class="outline-text-3" id="text-org688eae3">
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">NEW</span>          = <span style="color: #a45bad;">0</span>;
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">COMPLETING</span>   = <span style="color: #a45bad;">1</span>;
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">NORMAL</span>       = <span style="color: #a45bad;">2</span>;
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">EXCEPTIONAL</span>  = <span style="color: #a45bad;">3</span>;
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">CANCELLED</span>    = <span style="color: #a45bad;">4</span>;
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">INTERRUPTING</span> = <span style="color: #a45bad;">5</span>;
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #4f97d7; font-weight: bold;">static</span> <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">INTERRUPTED</span>  = <span style="color: #a45bad;">6</span>;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-orgf2f2d74" class="outline-3">
+<h3 id="orgf2f2d74">状态的变化</h3>
+<div class="outline-text-3" id="text-orgf2f2d74">
+<p>
+在FutureTask中，一共存在上面所述7种状态，其中New为实例的初始化状态，
+Completing和Interrupting为中间状态，其余四个为最终状态。
+</p>
+<ul class="org-ul">
+<li>New-&gt;Completing-&gt;Normal</li>
+<li>New-&gt;Completing-&gt;Exceptional</li>
+<li>New-&gt;Cancelled</li>
+<li>New-&gt;Interrupting-&gt;Interrupted</li>
+</ul>
+</div>
+</div>
+</div>
+<div id="outline-container-org07fb37f" class="outline-2">
+<h2 id="org07fb37f">并发问题的解决</h2>
+<div class="outline-text-2" id="text-org07fb37f">
+</div>
+<div id="outline-container-org8302213" class="outline-3">
+<h3 id="org8302213">争夺状态改变权</h3>
+<div class="outline-text-3" id="text-org8302213">
+<p>
+对于初始化状态New，正如之前看到的，其可能有四种状态演化的方式，
+而这四种状态演化方式主要是通过调用cancel,set和setException三个方法来获得的。
+</p>
+<ul class="org-ul">
+<li>cancel操作: New-&gt;Interrupting-&gt;Interrupted</li>
+<li>cancel操作: New-&gt;Cancel</li>
+<li>set操作: New-&gt;Completing-&gt;Normal</li>
+<li>setException操作: New-&gt;Completing-&gt;Exceptional</li>
+</ul>
+
+<p>
+由于对FutureTask实例存在cancel,set,setException操作的并发调用，
+为了避免状态演化的混乱，这三种方法均采用cas操作来争夺唯一的状态改变权。
+表现在源码中，这几个方法都通过调用STATE.compareAndSet来试图获取状态控制权。
+当获取到状态控制权之后，表面该线程是唯一修改状态变量的线程，
+因此可以直接继续操作状态值(比如set方法中:STATE.setRelease(this, NORMAL))，而无需再使用对性能有消耗的cas操作了。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">protected</span> <span style="color: #ce537a; font-weight: bold;">void</span> <span style="color: #bc6ec5; font-weight: bold;">set</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">V</span> <span style="color: #7590db;">v</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>STATE.compareAndSet<span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, NEW, COMPLETING<span style="color: #2d9574;">)</span><span style="color: #bc6ec5;">)</span> <span style="color: #bc6ec5;">{</span>
+        outcome = v;
+        STATE.setRelease<span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, NORMAL<span style="color: #2d9574;">)</span>; <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">final state</span>
+        finishCompletion<span style="color: #2d9574;">()</span>;
+    <span style="color: #bc6ec5;">}</span>
+<span style="color: #4f97d7;">}</span>
+
+<span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #bc6ec5; font-weight: bold;">cancel</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #7590db;">mayInterruptIfRunning</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span><span style="color: #a45bad;">!</span><span style="color: #2d9574;">(</span>state == NEW &amp;&amp; STATE.compareAndSet
+          <span style="color: #67b11d;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, NEW, mayInterruptIfRunning ? INTERRUPTING : CANCELLED<span style="color: #67b11d;">)</span><span style="color: #2d9574;">)</span><span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #a45bad;">false</span>;
+    <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #bc6ec5;">{</span>    <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">in case call to interrupt throws exception</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>mayInterruptIfRunning<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #67b11d;">{</span>
+                <span style="color: #ce537a; font-weight: bold;">Thread</span> <span style="color: #7590db;">t</span> = runner;
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span>t != <span style="color: #a45bad;">null</span><span style="color: #b1951d;">)</span>
+                    t.interrupt<span style="color: #b1951d;">()</span>;
+            <span style="color: #67b11d;">}</span> <span style="color: #4f97d7; font-weight: bold;">finally</span> <span style="color: #67b11d;">{</span> <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">final state</span>
+                STATE.setRelease<span style="color: #b1951d;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, INTERRUPTED<span style="color: #b1951d;">)</span>;
+            <span style="color: #67b11d;">}</span>
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span> <span style="color: #4f97d7; font-weight: bold;">finally</span> <span style="color: #bc6ec5;">{</span>
+        finishCompletion<span style="color: #2d9574;">()</span>;
+    <span style="color: #bc6ec5;">}</span>
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #a45bad;">true</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org70ca8b1" class="outline-3">
+<h3 id="org70ca8b1">状态码判断</h3>
+<div class="outline-text-3" id="text-org70ca8b1">
+<p>
+FutureTask中状态机设计的比较巧妙的一点就是:可以基于状态码的值来快速决定下一步的行动。
+比如在get方法中，通过比较当前状态和COMPLETING值，来决定是继续等待完成还是调用report方法返回结果。
+对后者，通过将状态值与NORMAL以及CANCEL值比较，得出最终结果或异常类型。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">V</span> <span style="color: #bc6ec5; font-weight: bold;">get</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7; font-weight: bold;">throws</span> <span style="color: #ce537a; font-weight: bold;">InterruptedException</span>, <span style="color: #ce537a; font-weight: bold;">ExecutionException</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span> = state;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>s &lt;= COMPLETING<span style="color: #bc6ec5;">)</span>
+        s = awaitDone<span style="color: #bc6ec5;">(</span><span style="color: #a45bad;">false</span>, <span style="color: #a45bad;">0L</span><span style="color: #bc6ec5;">)</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> report<span style="color: #bc6ec5;">(</span>s<span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">V</span> <span style="color: #bc6ec5; font-weight: bold;">report</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7; font-weight: bold;">throws</span> <span style="color: #ce537a; font-weight: bold;">ExecutionException</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">Object</span> <span style="color: #7590db;">x</span> = outcome;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>s == NORMAL<span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #bc6ec5;">(</span><span style="color: #ce537a; font-weight: bold;">V</span><span style="color: #bc6ec5;">)</span>x;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>s &gt;= CANCELLED<span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">throw</span> <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">CancellationException</span><span style="color: #bc6ec5;">()</span>;
+    <span style="color: #4f97d7; font-weight: bold;">throw</span> <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">ExecutionException</span><span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">(</span><span style="color: #ce537a; font-weight: bold;">Throwable</span><span style="color: #2d9574;">)</span>x<span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org4f52837" class="outline-3">
+<h3 id="org4f52837">任务执行</h3>
+<div class="outline-text-3" id="text-org4f52837">
+<p>
+FutureTask中最重要的方法莫过于run方法了，毕竟FutureTask的核心就是异步执行了。
+在很多情况下提交的Futuretask任务为耗时任务，在该任务执行前或执行过程中极有可能由于各种原因被取消。
+因此在run方法的finally中需要进行状态机判断,如果该任务已被取消,需要让出当前线程，等完成取消任务后再继续执行。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">void</span> <span style="color: #bc6ec5; font-weight: bold;">run</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>state != NEW ||
+        <span style="color: #a45bad;">!</span>RUNNER.compareAndSet<span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, <span style="color: #a45bad;">null</span>, Thread.currentThread<span style="color: #67b11d;">()</span><span style="color: #2d9574;">)</span><span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">return</span>;
+    <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #ce537a; font-weight: bold;">Callable</span><span style="color: #2d9574;">&lt;</span><span style="color: #ce537a; font-weight: bold;">V</span><span style="color: #2d9574;">&gt;</span> <span style="color: #7590db;">c</span> = callable;
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>c != <span style="color: #a45bad;">null</span> &amp;&amp; state == NEW<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #ce537a; font-weight: bold;">V</span> <span style="color: #7590db;">result</span>;
+            <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #7590db;">ran</span>;
+            <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #67b11d;">{</span>
+                result = c.call<span style="color: #b1951d;">()</span>;
+                ran = <span style="color: #a45bad;">true</span>;
+            <span style="color: #67b11d;">}</span> <span style="color: #4f97d7; font-weight: bold;">catch</span> <span style="color: #67b11d;">(</span><span style="color: #ce537a; font-weight: bold;">Throwable</span> <span style="color: #7590db;">ex</span><span style="color: #67b11d;">)</span> <span style="color: #67b11d;">{</span>
+                result = <span style="color: #a45bad;">null</span>;
+                ran = <span style="color: #a45bad;">false</span>;
+                setException<span style="color: #b1951d;">(</span>ex<span style="color: #b1951d;">)</span>;
+            <span style="color: #67b11d;">}</span>
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>ran<span style="color: #67b11d;">)</span>
+                set<span style="color: #67b11d;">(</span>result<span style="color: #67b11d;">)</span>;
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span> <span style="color: #4f97d7; font-weight: bold;">finally</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">runner must be non-null until state is settled to</span>
+        <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">prevent concurrent calls to run()</span>
+        runner = <span style="color: #a45bad;">null</span>;
+        <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">state must be re-read after nulling runner to prevent</span>
+        <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">leaked interrupts</span>
+        <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span> = state;
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>s &gt;= INTERRUPTING<span style="color: #2d9574;">)</span>
+            handlePossibleCancellationInterrupt<span style="color: #2d9574;">(</span>s<span style="color: #2d9574;">)</span>;
+    <span style="color: #bc6ec5;">}</span>
+<span style="color: #4f97d7;">}</span>
+
+<span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">void</span> <span style="color: #bc6ec5; font-weight: bold;">handlePossibleCancellationInterrupt</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>s == INTERRUPTING<span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">while</span> <span style="color: #bc6ec5;">(</span>state == INTERRUPTING<span style="color: #bc6ec5;">)</span>
+            Thread.yield<span style="color: #bc6ec5;">()</span>; <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">wait out pending interrupt</span>
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>
+</div>

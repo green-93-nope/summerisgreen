@@ -1,6 +1,6 @@
 ---
 title: "Hadoop中的Mapper和Reducer数量设定"
-date: 2018-04-23
+date: 2018-04-24
 layout: post
 categories: 
 - 大数据
@@ -11,69 +11,65 @@ published: true
 comments: 
 ---
 <p>
-为了更加方便地对T级别的大数据进行批量处理，Hadoop提供了MapReduce这个编程范式。
-MapReduce基于分而治冶的思想，将海量数据拆分为大量的小数据块，从而在多个节点并行处理海量数据，最后通过将结果合并以实现高效的批量处理。
+对于大数据处理，特别是T级别以上的海量数据，
+由于数据量大大超过了单机运算能力，需要通过分布式的方法来对数据进行处理。
+Hadoop作为大数据领域的明星项目，提供了MapReduce分布式编程框架,
+其基于分而治冶的思想，将海量数据拆分为大量的小数据块，从而在多个节点并行处理海量数据。
 </p>
 
 <p>
-在MapReduce框架中，输入数据被划分成等长的小数据块，称为输入分片(input split)。
-每个输入分片均会构建一个map任务以处理分片中的每条记录,排过序的处理结果通过网络传输发送到运行reduce任务的节点。
-reduce任务节点在复制完所有map输出后，将其按照排序顺序合并。
-最后，reduce任务通过运行用户自定义的reduce函数以完成MapReduce作业。
+虽然MapReduce通过分布式计算、map端"数据本地化优化“等不同层次的策略来提升数据处理任务的执行效率，
+但由于实际处理的数据量较大，一个典型的MapReduce作业往往需要花费数分钟到数小时来完成。
+并且在任务执行的过程中，MapReduce作业还将占用大量的网络带宽和计算资源，从而降低了整个集群的计算能力。
+为了进一步提升MapReduce的执行效率，需要对MapReduce任务进行调优。
+而最为直接有效的一种调优方式就是调整Mapper和Reducer的数量。
 </p>
 
-<div id="outline-container-org4c37736" class="outline-2">
-<h2 id="org4c37736">Mapper的数量设定</h2>
-<div class="outline-text-2" id="text-org4c37736">
+<div id="outline-container-org822556c" class="outline-2">
+<h2 id="org822556c">Mapper的数量设定</h2>
+<div class="outline-text-2" id="text-org822556c">
 <p>
-为了使map任务获得最佳性能，Hadoop采用了“数据本地化优化”的策略。
-在application master为每个分片创建map作业的过程中，MapReduce框架优先选择存储有输入数据的节点来执行map任务。
-当所有存储该分片数据的节点均在执行map任务时，作业调度会尝试从数据块所在机架上的其他节点寻找空闲的map槽，
-只有当无法在当前机架运行map任务时才在其他机架创建map作业。
-因为与跨机架的数据传输相比，位于同一机架上的两个数据节点将有更高的带宽和更低的延迟响应。
-</p>
-
-<p>
-此外，为了防止任务启动所花费的时间在整个作业的执行时间中占比较大，从而导致任务执行效率低下的问题，
-map任务最好拥有一分钟以上的运行时间，
-与Reducer不同，无法通过直接设置Mapper的个数来调节Mapper的运行时间，而需要通过设定分片大小来间接调整Mapper的个数。
+在对Mapper调优的过程中，一个经验法则是：
+map任务最好拥有一分钟以上的运行时间。
+因为如果任务运行时间过短，将导致在整个作业的执行过程中任务启动所花费的时间过大，从而降低了实际的任务执行效率。
+对map任务的运行时间影响最大的是Mapper的个数，不过与Reducer不同，Mapper的个数是无法显示指定的。
+调节Mapper数量的一种方式是设置参数mapred.jobtracker.maxtasks.per.job，
+但其只能限制每个job中并发运行的map或reduce任务的上限，而当实际运行的map数低于该上限时，该参数将失效。
+如果想要对Mapper个数进行更加直接有效的控制，需要指定输入数据的分片大小。
 </p>
 
 <p>
-MapReduce框架的输入数据分片是由InputFormat接口来完成的。
-在大数据分析中，文件是最常见的一种数据源格式，
-它们均采用FileInputFormat作为其数据源InputFormat实现的基类。
+输入分片(input split)是MapReduce框架为使map任务能并行处理海量数据记录，
+为每个map任务单独划分的一个等长小数据块。
+在MapReduce框架中，输入数据分片通过InputFormat接口完成。
+为方便程序员使用，Hadoop为最常见的文件数据源提供了大量基于FileInputFormat基类的实现类。
+因此只要掌握了FileInputFormat的数据分片原理，也就知道了各种常见的数据源实现类是如何进行数据分片的了。
 </p>
 
 <p>
 FileInputFormat提供了三个属性参数来控制实际的分片大小：mapreduce.input.fileinputformat.split.minsize, mapreduce.input.fileinputformat.split.maxsize以及dfs.blocksize。
 这三个参数分别表示一个文件分片最小的有效字节数、最大字节数以及HDFS中块的大小。
 利用公式splitSize = max(minimumSize, min(maximumSize, blockSize))，可以通过改变上述三个参数来调节最终的分片大小。
-在调节分片大小时需要防止分片切分过小，从而导致管理分片的总时间和构建map任务的总时间将决定作业的整个执行时间。
-同时分片大小也不应大于块大小，因为此时无法确保存储有该切片的多个数据块位于单个节点中，从而增加了执行map任务中的网络传输。
+在调节分片大小时需要防止分片切分过小，避免管理分片和构建map任务的时间在整个任务运行周期中占比过大。
+但分片划分也不是越大越好，至少不应大于块大小，因为那时将无法确保存储有该切片的多个数据块位于单个节点中，从而增加了执行map任务时的网络传输。
 因此对于大多数作业来说，一个合理的分片大小趋向于HDFS的一个块的大小，默认是128MB。
 </p>
 
 <p>
-需要注意的是，
-由于数据分片对有效字节数小于maximumSize的文件并不进行拆分，并且进行拆分的大文件的大小并非恰好为文件块大小的倍数，因此分片大小并不确定。
-为了最小化运行时间，Hadoop采用了类似贪心算法的策略来优先处理最大的分片。
-分片大小的信息和指向分片数据的引用均包含在输入分片中，供application master使用。
-</p>
-
-<p>
-另一个会影响Mapper个数的参数是mapred.jobtracker.maxtasks.per.job，不过其只能限制每个job中能够并发运行的map或reduce任务的上限。
+需要注意的是，虽然输入分片划分是本着尽量拆分成等长数据块的原则，但最后的分片大小并不完全一致。
+因为数据分片对有效字节数小于maximumSize的文件并不进行拆分，而且进行拆分的大文件的大小往往不会为文件块大小的整数倍。
+分片大小与指向分片数据的引用一起包含在输入分片中，供application master调度使用。
+在调度的过程中，Hadoop通过优先处理最大的分片以最小化实际运行时间。
 </p>
 </div>
 </div>
 
-<div id="outline-container-org9e4d141" class="outline-2">
-<h2 id="org9e4d141">Reducer的数量设定</h2>
-<div class="outline-text-2" id="text-org9e4d141">
+<div id="outline-container-org1dd2598" class="outline-2">
+<h2 id="org1dd2598">Reducer的数量设定</h2>
+<div class="outline-text-2" id="text-org1dd2598">
 <p>
 Reducer的个数是由用户独立设置的，在默认情况下只有一个Reducer。
 它的个数既可以使用命令行参数设置（mapreduce.job.reduces=number），也可以在程序中制定（job.setNumReduceTasks(number)）。
-虽然用户可以很方便地对Reducer的个数进行修改，但在设置的过程中却要在较高的Reducer数量带来的小文件过多的问题，与较低的Reducer数量带来的整体Reduce过程过长、负载不均衡以及失败率较大的不足之间进行权衡。
 </p>
 
 <p>
@@ -88,9 +84,9 @@ Hadoop权威指南给出的一条经验法则是：目标Reducer保持在每个�
 </div>
 </div>
 
-<div id="outline-container-orgffc62e6" class="outline-2">
-<h2 id="orgffc62e6">参考</h2>
-<div class="outline-text-2" id="text-orgffc62e6">
+<div id="outline-container-orgb4af80d" class="outline-2">
+<h2 id="orgb4af80d">参考</h2>
+<div class="outline-text-2" id="text-orgb4af80d">
 <p>
 <a href="https://book.douban.com/subject/27115351/">Hadoop权威指南</a>
 </p>

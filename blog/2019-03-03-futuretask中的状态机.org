@@ -1,0 +1,136 @@
+#+TITLE: FutureTask源码简析
+#+DATE: 2019-03-03
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: java
+#+JEKYLL_TAGS: java 源码
+#+JEKYLL_PUBLISHED: true
+
+由于FutureTask可能在多个线程中触发执行或者取消逻辑,如果没有线程安全保证，
+可能会出现执行已取消操作，异步操作被多次执行等违反Futuretask语义的情形。
+为了保证FutureTask的线程安全，jdk结合使用了状态机和cas操作。
+* FutureTask中的状态机
+** 状态机设计
+#+begin_src java
+  private static final int NEW          = 0;
+  private static final int COMPLETING   = 1;
+  private static final int NORMAL       = 2;
+  private static final int EXCEPTIONAL  = 3;
+  private static final int CANCELLED    = 4;
+  private static final int INTERRUPTING = 5;
+  private static final int INTERRUPTED  = 6;
+#+end_src
+** 状态的变化
+在FutureTask中，一共存在上面所述7种状态，其中New为实例的初始化状态，
+Completing和Interrupting为中间状态，其余四个为最终状态。
+ + New->Completing->Normal
+ + New->Completing->Exceptional
+ + New->Cancelled
+ + New->Interrupting->Interrupted
+* 并发问题的解决
+** 争夺状态改变权
+对于初始化状态New，正如之前看到的，其可能有四种状态演化的方式，
+而这四种状态演化方式主要是通过调用cancel,set和setException三个方法来获得的。
++ cancel操作: New->Interrupting->Interrupted
++ cancel操作: New->Cancel
++ set操作: New->Completing->Normal
++ setException操作: New->Completing->Exceptional
+
+由于对FutureTask实例存在cancel,set,setException操作的并发调用，
+为了避免状态演化的混乱，这三种方法均采用cas操作来争夺唯一的状态改变权。
+表现在源码中，这几个方法都通过调用STATE.compareAndSet来试图获取状态控制权。
+当获取到状态控制权之后，表面该线程是唯一修改状态变量的线程，
+因此可以直接继续操作状态值(比如set方法中:STATE.setRelease(this, NORMAL))，而无需再使用对性能有消耗的cas操作了。
+#+begin_src java
+protected void set(V v) {
+    if (STATE.compareAndSet(this, NEW, COMPLETING)) {
+        outcome = v;
+        STATE.setRelease(this, NORMAL); // final state
+        finishCompletion();
+    }
+}
+
+public boolean cancel(boolean mayInterruptIfRunning) {
+    if (!(state == NEW && STATE.compareAndSet
+          (this, NEW, mayInterruptIfRunning ? INTERRUPTING : CANCELLED)))
+        return false;
+    try {    // in case call to interrupt throws exception
+        if (mayInterruptIfRunning) {
+            try {
+                Thread t = runner;
+                if (t != null)
+                    t.interrupt();
+            } finally { // final state
+                STATE.setRelease(this, INTERRUPTED);
+            }
+        }
+    } finally {
+        finishCompletion();
+    }
+    return true;
+}
+#+end_src
+** 状态码判断
+FutureTask中状态机设计的比较巧妙的一点就是:可以基于状态码的值来快速决定下一步的行动。
+比如在get方法中，通过比较当前状态和COMPLETING值，来决定是继续等待完成还是调用report方法返回结果。
+对后者，通过将状态值与NORMAL以及CANCEL值比较，得出最终结果或异常类型。
+#+begin_src java
+public V get() throws InterruptedException, ExecutionException {
+    int s = state;
+    if (s <= COMPLETING)
+        s = awaitDone(false, 0L);
+    return report(s);
+}
+
+private V report(int s) throws ExecutionException {
+    Object x = outcome;
+    if (s == NORMAL)
+        return (V)x;
+    if (s >= CANCELLED)
+        throw new CancellationException();
+    throw new ExecutionException((Throwable)x);
+}
+#+end_src
+** 任务执行
+FutureTask中最重要的方法莫过于run方法了，毕竟FutureTask的核心就是异步执行了。
+在很多情况下提交的Futuretask任务为耗时任务，在该任务执行前或执行过程中极有可能由于各种原因被取消。
+因此在run方法的finally中需要进行状态机判断,如果该任务已被取消,需要让出当前线程，等完成取消任务后再继续执行。
+#+begin_src java
+public void run() {
+    if (state != NEW ||
+        !RUNNER.compareAndSet(this, null, Thread.currentThread()))
+        return;
+    try {
+        Callable<V> c = callable;
+        if (c != null && state == NEW) {
+            V result;
+            boolean ran;
+            try {
+                result = c.call();
+                ran = true;
+            } catch (Throwable ex) {
+                result = null;
+                ran = false;
+                setException(ex);
+            }
+            if (ran)
+                set(result);
+        }
+    } finally {
+        // runner must be non-null until state is settled to
+        // prevent concurrent calls to run()
+        runner = null;
+        // state must be re-read after nulling runner to prevent
+        // leaked interrupts
+        int s = state;
+        if (s >= INTERRUPTING)
+            handlePossibleCancellationInterrupt(s);
+    }
+}
+
+private void handlePossibleCancellationInterrupt(int s) {
+    if (s == INTERRUPTING)
+        while (state == INTERRUPTING)
+            Thread.yield(); // wait out pending interrupt
+}
+#+end_src
