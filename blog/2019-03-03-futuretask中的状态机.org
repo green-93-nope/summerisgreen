@@ -134,3 +134,71 @@ private void handlePossibleCancellationInterrupt(int s) {
             Thread.yield(); // wait out pending interrupt
 }
 #+end_src
+
+值得注意的是，在任务结束后，futuretask类只保留了最终的状态及结果(正确值或异常)，
+而执行线程信息以及callable回调函数等对象都因不再有用而置null,以便及时被gc回收。
+** 结果等待
+当用户代码向线程池提交任务后，一个最常见的后续操作就是阻塞(或带超时的阻塞)等待任务结果
+#+begin_src java
+public V get() throws InterruptedException, ExecutionException {
+    int s = state;
+    if (s <= COMPLETING)
+        s = awaitDone(false, 0L);
+    return report(s);
+}
+
+public V get(long timeout, TimeUnit unit)
+    throws InterruptedException, ExecutionException, TimeoutException {
+    if (unit == null)
+        throw new NullPointerException();
+    int s = state;
+    if (s <= COMPLETING &&
+        (s = awaitDone(true, unit.toNanos(timeout))) <= COMPLETING)
+        throw new TimeoutException();
+    return report(s);
+}
+#+end_src
+
+如果此时任务还未完成，其将调用awaitDone方法，利用cas加入队列后，使用park/parkNanos方法阻塞线程，直至被唤醒。
+其将在下面三种情况下被唤醒:
+1.线程被中断
+2.超时阻塞已超时
+3.完成任务结果及状态记录(正确值或异常结果更新)
+#+begin_src java
+private int awaitDone(boolean timed, long nanos)
+    throws InterruptedException {
+    final long deadline = timed ? System.nanoTime() + nanos : 0L;
+    WaitNode q = null;
+    boolean queued = false;
+    for (;;) {
+        if (Thread.interrupted()) {
+            removeWaiter(q);
+            throw new InterruptedException();
+        }
+
+        int s = state;
+        if (s > COMPLETING) {
+            if (q != null)
+                q.thread = null;
+            return s;
+        }
+        else if (s == COMPLETING) // cannot time out yet
+            Thread.yield();
+        else if (q == null)
+            q = new WaitNode();
+        else if (!queued)
+            queued = UNSAFE.compareAndSwapObject(this, waitersOffset,
+                                                 q.next = waiters, q);
+        else if (timed) {
+            nanos = deadline - System.nanoTime();
+            if (nanos <= 0L) {
+                removeWaiter(q);
+                return state;
+            }
+            LockSupport.parkNanos(this, nanos);
+        }
+        else
+            LockSupport.park(this);
+    }
+}
+#+end_src

@@ -183,6 +183,86 @@ FutureTask中最重要的方法莫过于run方法了，毕竟FutureTask的核心
 <span style="color: #4f97d7;">}</span>
 </pre>
 </div>
+
+<p>
+值得注意的是，在任务结束后，futuretask类只保留了最终的状态及结果(正确值或异常)，
+而执行线程信息以及callable回调函数等对象都因不再有用而置null,以便及时被gc回收。
+</p>
+</div>
+</div>
+<div id="outline-container-org06ae1bb" class="outline-3">
+<h3 id="org06ae1bb">结果等待</h3>
+<div class="outline-text-3" id="text-org06ae1bb">
+<p>
+当用户代码向线程池提交任务后，一个最常见的后续操作就是阻塞(或带超时的阻塞)等待任务结果
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">V</span> <span style="color: #bc6ec5; font-weight: bold;">get</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7; font-weight: bold;">throws</span> <span style="color: #ce537a; font-weight: bold;">InterruptedException</span>, <span style="color: #ce537a; font-weight: bold;">ExecutionException</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span> = state;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>s &lt;= COMPLETING<span style="color: #bc6ec5;">)</span>
+        s = awaitDone<span style="color: #bc6ec5;">(</span><span style="color: #a45bad;">false</span>, <span style="color: #a45bad;">0L</span><span style="color: #bc6ec5;">)</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> report<span style="color: #bc6ec5;">(</span>s<span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+
+<span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">V</span> <span style="color: #bc6ec5; font-weight: bold;">get</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">timeout</span>, <span style="color: #ce537a; font-weight: bold;">TimeUnit</span> <span style="color: #7590db;">unit</span><span style="color: #4f97d7;">)</span>
+    <span style="color: #4f97d7; font-weight: bold;">throws</span> <span style="color: #ce537a; font-weight: bold;">InterruptedException</span>, <span style="color: #ce537a; font-weight: bold;">ExecutionException</span>, <span style="color: #ce537a; font-weight: bold;">TimeoutException</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>unit == <span style="color: #a45bad;">null</span><span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">throw</span> <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">NullPointerException</span><span style="color: #bc6ec5;">()</span>;
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span> = state;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>s &lt;= COMPLETING &amp;&amp;
+        <span style="color: #2d9574;">(</span>s = awaitDone<span style="color: #67b11d;">(</span><span style="color: #a45bad;">true</span>, unit.toNanos<span style="color: #b1951d;">(</span>timeout<span style="color: #b1951d;">)</span><span style="color: #67b11d;">)</span><span style="color: #2d9574;">)</span> &lt;= COMPLETING<span style="color: #bc6ec5;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">throw</span> <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">TimeoutException</span><span style="color: #bc6ec5;">()</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> report<span style="color: #bc6ec5;">(</span>s<span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+
+<p>
+如果此时任务还未完成，其将调用awaitDone方法，利用cas加入队列后，使用park/parkNanos方法阻塞线程，直至被唤醒。
+其将在下面三种情况下被唤醒:
+1.线程被中断
+2.超时阻塞已超时
+3.完成任务结果及状态记录(正确值或异常结果更新)
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #bc6ec5; font-weight: bold;">awaitDone</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #7590db;">timed</span>, <span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">nanos</span><span style="color: #4f97d7;">)</span>
+    <span style="color: #4f97d7; font-weight: bold;">throws</span> <span style="color: #ce537a; font-weight: bold;">InterruptedException</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">deadline</span> = timed ? System.nanoTime<span style="color: #bc6ec5;">()</span> + nanos : <span style="color: #a45bad;">0L</span>;
+    <span style="color: #ce537a; font-weight: bold;">WaitNode</span> <span style="color: #7590db;">q</span> = <span style="color: #a45bad;">null</span>;
+    <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #7590db;">queued</span> = <span style="color: #a45bad;">false</span>;
+    <span style="color: #4f97d7; font-weight: bold;">for</span> <span style="color: #bc6ec5;">(</span>;;<span style="color: #bc6ec5;">)</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>Thread.interrupted<span style="color: #67b11d;">()</span><span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            removeWaiter<span style="color: #67b11d;">(</span>q<span style="color: #67b11d;">)</span>;
+            <span style="color: #4f97d7; font-weight: bold;">throw</span> <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">InterruptedException</span><span style="color: #67b11d;">()</span>;
+        <span style="color: #2d9574;">}</span>
+
+        <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span> = state;
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>s &gt; COMPLETING<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>q != <span style="color: #a45bad;">null</span><span style="color: #67b11d;">)</span>
+                q.thread = <span style="color: #a45bad;">null</span>;
+            <span style="color: #4f97d7; font-weight: bold;">return</span> s;
+        <span style="color: #2d9574;">}</span>
+        <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>s == COMPLETING<span style="color: #2d9574;">)</span> <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">cannot time out yet</span>
+            Thread.yield<span style="color: #2d9574;">()</span>;
+        <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>q == <span style="color: #a45bad;">null</span><span style="color: #2d9574;">)</span>
+            q = <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">WaitNode</span><span style="color: #2d9574;">()</span>;
+        <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span><span style="color: #a45bad;">!</span>queued<span style="color: #2d9574;">)</span>
+            queued = UNSAFE.compareAndSwapObject<span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, waitersOffset,
+                                                 q.next = waiters, q<span style="color: #2d9574;">)</span>;
+        <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>timed<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            nanos = deadline - System.nanoTime<span style="color: #67b11d;">()</span>;
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>nanos &lt;= <span style="color: #a45bad;">0L</span><span style="color: #67b11d;">)</span> <span style="color: #67b11d;">{</span>
+                removeWaiter<span style="color: #b1951d;">(</span>q<span style="color: #b1951d;">)</span>;
+                <span style="color: #4f97d7; font-weight: bold;">return</span> state;
+            <span style="color: #67b11d;">}</span>
+            LockSupport.parkNanos<span style="color: #67b11d;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, nanos<span style="color: #67b11d;">)</span>;
+        <span style="color: #2d9574;">}</span>
+        <span style="color: #4f97d7; font-weight: bold;">else</span>
+            LockSupport.park<span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span><span style="color: #2d9574;">)</span>;
+    <span style="color: #bc6ec5;">}</span>
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
 </div>
 </div>
 </div>
