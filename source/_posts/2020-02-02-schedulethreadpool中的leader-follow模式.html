@@ -1,0 +1,117 @@
+---
+title: "ScheduledThreadPool中的Leader-Follow模式"
+date: 2020-02-02
+layout: post
+categories: 
+- java
+tags: 
+- java 
+- 源码
+published: true
+comments: 
+---
+<p>
+ScheduledThreadPoolExecutor 是java中一个非常常用的定时调度的工具，其提供了两种定时调度常用模式:
+1.固定调度周期的任务执行。
+2.固定延迟间隔的任务执行，延迟间隔表示的是前一次执行完成到后一次执行开始的时间差。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #a45bad;">1</span>.scheduleAtFixedRate<span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">Runnable</span> <span style="color: #7590db;">command</span>,<span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">initialDelay</span>,<span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">period</span>,<span style="color: #ce537a; font-weight: bold;">TimeUnit</span> <span style="color: #7590db;">unit</span><span style="color: #4f97d7;">)</span>
+<span style="color: #a45bad;">2</span>.scheduleWithFixedDelay<span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">Runnable</span> <span style="color: #7590db;">command</span>,<span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">initialDelay</span>,<span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">delay</span>,<span style="color: #ce537a; font-weight: bold;">TimeUnit</span> <span style="color: #7590db;">unit</span><span style="color: #4f97d7;">)</span> 
+</pre>
+</div>
+
+<p>
+ScheduledThreadPoolExecutor 是基于ThreadPoolExecutor实现的，其继承了类ThreadPoolExecutor。
+从构造器可以看出，为满足定时调度的需求，其基于ThreadPoolExecutor定制了延迟工作队列DelayedWorkQueue。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #bc6ec5; font-weight: bold;">ScheduledThreadPoolExecutor</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">corePoolSize</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+     <span style="color: #4f97d7; font-weight: bold;">super</span><span style="color: #bc6ec5;">(</span>corePoolSize, <span style="color: #a45bad;">Integer</span>.MAX_VALUE,
+           DEFAULT_KEEPALIVE_MILLIS <span style="color: #2aa1ae; background-color: #292e34;">/*</span><span style="color: #2aa1ae; background-color: #292e34;">10L*/</span>, MILLISECONDS,
+           <span style="color: #4f97d7; font-weight: bold;">new</span> <span style="color: #ce537a; font-weight: bold;">DelayedWorkQueue</span><span style="color: #2d9574;">()</span><span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+
+<p>
+DelayedWorkQueue是一个基于最小堆的队列，其在元素进出队列等BlockingQueue接口方法中使用可重入锁，以保证线程安全。
+为了在O(1)的时间取消特定任务的调度，ScheduleFutrueTask对象中还额外增加了heapIndex字段，以记录其在最小堆中的位置。
+</p>
+
+<div id="outline-container-orgd5da137" class="outline-2">
+<h2 id="orgd5da137">Leader-Follower模式</h2>
+<div class="outline-text-2" id="text-orgd5da137">
+<p>
+定时调度线程池与一般线程池的一个重要不同:提交的任务是延迟而非立即执行的，因此worker线程调用队列的take以取出执行任务必定是要阻塞的。
+考虑到等待延迟执行任务的线程无需都使用timed waiting等待队首任务，一个task的执行线程只有一个，全部唤醒只会造成大量无效的线程唤醒和阻塞操作。
+</p>
+
+
+<p>
+ScheduledThreadPool采用了Leader-Follower模式，等待第一个线程的任务也称为leader，其调用available.awaitNanos待当前队列头部任务到达调度时间时唤醒。
+其余线程作为follower只需调用await方法无限阻塞等待，直至被leader唤醒，并重新完成抢锁-&gt;尝试执行队列首元素-&gt;抢leader-&gt;等待的循环。
+</p>
+
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">RunnableScheduledFuture</span><span style="color: #4f97d7;">&lt;</span>?<span style="color: #4f97d7;">&gt;</span> <span style="color: #bc6ec5; font-weight: bold;">take</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7; font-weight: bold;">throws</span> <span style="color: #ce537a; font-weight: bold;">InterruptedException</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">ReentrantLock</span> <span style="color: #7590db;">lock</span> = <span style="color: #4f97d7; font-weight: bold;">this</span>.lock;
+    lock.lockInterruptibly<span style="color: #bc6ec5;">()</span>;
+    <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #4f97d7; font-weight: bold;">for</span> <span style="color: #2d9574;">(</span>;;<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #ce537a; font-weight: bold;">RunnableScheduledFuture</span><span style="color: #67b11d;">&lt;</span>?<span style="color: #67b11d;">&gt;</span> <span style="color: #7590db;">first</span> = queue<span style="color: #67b11d;">[</span><span style="color: #a45bad;">0</span><span style="color: #67b11d;">]</span>;
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>first == <span style="color: #a45bad;">null</span><span style="color: #67b11d;">)</span>
+                available.await<span style="color: #67b11d;">()</span>;
+            <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #67b11d;">{</span>
+                <span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">delay</span> = first.getDelay<span style="color: #b1951d;">(</span>NANOSECONDS<span style="color: #b1951d;">)</span>;
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span>delay &lt;= <span style="color: #a45bad;">0L</span><span style="color: #b1951d;">)</span>
+                    <span style="color: #4f97d7; font-weight: bold;">return</span> finishPoll<span style="color: #b1951d;">(</span>first<span style="color: #b1951d;">)</span>;
+                first = <span style="color: #a45bad;">null</span>; <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">don't retain ref while waiting</span>
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span>leader != <span style="color: #a45bad;">null</span><span style="color: #b1951d;">)</span>
+                    available.await<span style="color: #b1951d;">()</span>;
+                <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #b1951d;">{</span>
+                    <span style="color: #ce537a; font-weight: bold;">Thread</span> <span style="color: #7590db;">thisThread</span> = Thread.currentThread<span style="color: #4f97d7;">()</span>;
+                    leader = thisThread;
+                    <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #4f97d7;">{</span>
+                        available.awaitNanos<span style="color: #bc6ec5;">(</span>delay<span style="color: #bc6ec5;">)</span>;
+                    <span style="color: #4f97d7;">}</span> <span style="color: #4f97d7; font-weight: bold;">finally</span> <span style="color: #4f97d7;">{</span>
+                        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>leader == thisThread<span style="color: #bc6ec5;">)</span>
+                            leader = <span style="color: #a45bad;">null</span>;
+                    <span style="color: #4f97d7;">}</span>
+                <span style="color: #b1951d;">}</span>
+            <span style="color: #67b11d;">}</span>
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span> <span style="color: #4f97d7; font-weight: bold;">finally</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>leader == <span style="color: #a45bad;">null</span> &amp;&amp; queue<span style="color: #67b11d;">[</span><span style="color: #a45bad;">0</span><span style="color: #67b11d;">]</span> != <span style="color: #a45bad;">null</span><span style="color: #2d9574;">)</span>
+            available.signal<span style="color: #2d9574;">()</span>;
+        lock.unlock<span style="color: #2d9574;">()</span>;
+    <span style="color: #bc6ec5;">}</span>
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+
+<p>
+若新增元素位于堆顶，此时需安排等待该元素定期调度或立即执行的leader线程。
+为此offer方法在新增元素应率先调度时，清空leader，并signal唤醒某个等待线程，继续take方法中的循环:抢锁-&gt;尝试执行队首元素-&gt;抢leader-&gt;等待。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #bc6ec5; font-weight: bold;">offer</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">Runnable</span> <span style="color: #7590db;">x</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">ReentrantLock</span> <span style="color: #7590db;">lock</span> = <span style="color: #4f97d7; font-weight: bold;">this</span>.lock;
+    lock.lock<span style="color: #bc6ec5;">()</span>;
+    <span style="color: #4f97d7; font-weight: bold;">try</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #2aa1ae; background-color: #292e34;">/*</span>
+<span style="color: #2aa1ae; background-color: #292e34;">        insert into queue</span>
+<span style="color: #2aa1ae; background-color: #292e34;">        */</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>queue<span style="color: #67b11d;">[</span><span style="color: #a45bad;">0</span><span style="color: #67b11d;">]</span> == e<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            leader = <span style="color: #a45bad;">null</span>;
+            available.signal<span style="color: #67b11d;">()</span>;
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span> <span style="color: #4f97d7; font-weight: bold;">finally</span> <span style="color: #bc6ec5;">{</span>
+        lock.unlock<span style="color: #2d9574;">()</span>;
+    <span style="color: #bc6ec5;">}</span>
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #a45bad;">true</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>

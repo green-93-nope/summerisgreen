@@ -1,0 +1,58 @@
+#+TITLE: ES查询性能优化-优先选择keyword类型
+#+DATE: 2019-12-01
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: elasticsearch 
+#+JEKYLL_TAGS: elasticsearch 性能优化
+#+JEKYLL_PUBLISHED: true
+
+线上一个es查询越來越慢，而且cpu使用率也越來越高，逼近了比较危险的60%。
+在公司的es专家帮忙profile了慢查询后，发现大量时间开销花在一个只有0和1两种取值的int型字段term查询上(build_scorer耗时非常高)，让我们把不需要数学计算及范围查询的数值类型都改为keyword。
+
+完成字段类型修改后，我们还针对过滤后集合较小的场景使用了map的聚合数据结构，果然性能从之前的300ms提升到20ms,并且cpu使用率也降到了5%以下，可以说效果非常显著。
+这也带来了一个疑惑，es的索引字段类型keyword和number为何性能会相差如此之多。
+* 优先使用keyword而不是number
+由于从es 5.x开始，其使用了block k-d tree作为数值型字段的数据结构, 而不再是倒排索引,
+number和keyword查询适用范围也发生了很多差别，关于两者的具体，[[https://elasticsearch.cn/article/446][wood大叔的一篇文章]]讲的非常透彻。 
+
+对于不关心细节的使用者来说，只要把握如下两个原则即可:
++ 对于不需要范围查询和数值比较的字段，尽可能用keyword
++ 如果profile发现，大量时间开销将花费在build_scorer上，可以考虑下是否有number型字段需要替换成keyword
+
+keyword和number底层数据结构的区别以及适用的查询方式如下表所示:
+|   | 字段类型 | 数据结构       | 已有起始集合的term查询                    | range查询                                      |
+|---+----------+----------------+-------------------------------------------+------------------------------------------------|
+| / | <>       | <>             | <>                                        | <>                                             |
+| # | keyword  | 倒排索引       | 利用跳表快速定位docid                     | 区间内所有枚举值的term查询结果的合并(OR)       |
+|---+----------+----------------+-------------------------------------------+------------------------------------------------|
+| # | number   | Block k-d tree | PointRangeQuery:满足条件的docid构建bitset | 获取叶节点上的所有docid，扫描并和range范围比较 |
+
+通过观察上述表格，解释了为何一个只有0和1两种取值的int型字段term查询非常慢:该term查询筛选出的集合非常之大，以至于光是构造bitset都非常耗时。
+而将该类型转化为keyword后，在代价低的查询构造完迭代器后，其可以利用跳表快速判断迭代器中的docid是否满足要求。
+
+由于存在当rangeQuery的结果集巨大，而你却要为了验证少数几个docid是否存在，而不得不遍历整个结果集的问题，es 5.4引入了[[https://www.elastic.co/cn/blog/better-query-planning-for-range-queries-in-elasticsearch][indexOrDocValuesQuery]]。
+其对于遍历整个结果集的顺序访问场景，使用原有的PointRangeQuery。而对于仅仅验证少部分结果是否存在的随即访问场景,其将采用新引入的SortedSetDocValuesRangeQuery:
+从代价更低的query构造出的迭代器中，依次取出doc id并去磁盘(随机访问)匹配value。
+* 为何聚合依旧很慢
+当将能改成keyword的索引字段都改成keyword后，发现个很神奇的现象，
+一个query第一次查询时甚至比优化前慢多了达到秒级别，但多尝试几次后又很快，达到20多ms。
+经过对查询条件进行多次调整尝试，发现上述问题是对区分度较高的keyword字段(原先为数值型)进行聚合而导致的。
+
+[[https://www.elastic.co/cn/blog/improving-the-performance-of-high-cardinality-terms-aggregations-in-elasticsearch][查询资料]]后了解到，ES默认聚合采用global ordinals的数据结构对聚合字段进行bucket分组，其适合包含的原始文档非常多的情况。
+但当新数据刷入后的查询需要重建global ordinals数据结构，此时将会产生慢查询，并且重建时间随着区分度的增加而增加。
+可通过[[https://www.elastic.co/guide/en/elasticsearch/reference/6.5/eager-global-ordinals.html][enable eager global ordinals]],让其在segments更新时自动更新全局global ordinals，从而保证查询稳定性。
+
+在我们的场景中，由于terms过滤后只剩少量文档需要聚合，可以采用直接在内存map中进行聚合的方案。
+可以设置execution_hint:map达到此效果。不过在6.7版本前，由于存在bug，需要将查询语句改写成script才能走map的聚合计划。具体可参考如下示例。
+#+begin_example
+"aggregations" : {
+    "top-ibans" : {
+         "terms" : {
+             "script": {
+                 "source" : "doc['IBAN_keyword'].value",
+                 "lang" : "painless"
+             }
+         }
+     }
+}
+#+end_example

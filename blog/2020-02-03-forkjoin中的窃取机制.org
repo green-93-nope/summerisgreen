@@ -1,0 +1,36 @@
+#+TITLE: ForkJoin中的窃取机制
+#+DATE: 2020-02-03
+#+SETUPFILE: ~/Hexo/setupfile.org
+#+JEKYLL_LAYOUT: post
+#+JEKYLL_CATEGORIES: 
+#+JEKYLL_TAGS: 
+#+JEKYLL_PUBLISHED: true
+
++ 非ForkJoinWorkerThread只能窃取common池中的任务执行
++ 本地执行::取决于md&FIFO，默认从高到低，lifo
++ 窃取执行::从低到高，fifo
++ q数组奇数位置::1.注册工作workqueue，2.awaitJoin方法窃取的队列任务
++ q数组奇数+偶数位置::1.非ForkJoinWorkerThread将提交task，2.runWorker中的scan方法(n次本地方法，1次窃取方法)
++ 区分奇偶数::优先执行完提交任务所衍生出的子任务
++ 补偿线程的意思是：一个线程执行join()的时候知道自己注定要去block了，因此唤醒或者新建一个线程补偿自己block之后的算力损失。
++ 外部提交任务配置位置是固定的，但若对该位置抢锁失败(表明更新栈顶值较为频繁)，则更换位置
+****** scan(WorkQueue w, int r)
++ 从坐标r开始依次扫描array，当存在workqueue拥有待执行task时，即(尝试signalwork并)调用w.topLevelExec窃取执行
++ 当可能发现非空集合并执行任务时，返回true
+****** awaitJoin(WorkQueue w, ForkJoinTask<?> task, long deadline)
++ 调用w.tryRemoveAndExec(task)来尝试将workqueue中执行任务
++ 窃取奇数位置的workqueue的栈底任务执行
++ 任务状态未完成，则调用tryCompensate，返回0继续尝试窃取，否则等待至deadline
+***** workqueue
++ source::窃取的workqueue的id
+****** topLevelExec(ForkJoinTask<?> t, WorkQueue q, int n)
++ 执行t及窃取q中的任务(poll)
++ 执行当前workerqueue中的任务
++ 每执行n个当前queue任务，尝试执行一次制定q的
++ n = (r | (1 << TOP_BOUND_SHIFT)) & SMASK
+****** awaitJoin(WorkQueue w, ForkJoinTask<?> task, long deadline)
+1. 尝试调用w.tryRemoveAndExec(task)在队列中找到task并执行
+2. 如果依旧是未完成状态
+   1. 在奇数的workqueue数组中窃取栈底task执行
+   2. 如果任务未完成且空scan
+
