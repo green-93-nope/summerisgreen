@@ -1,0 +1,321 @@
+---
+title: "ForkJoin中的窃取机制"
+date: 2020-02-07
+layout: post
+categories: 
+- java
+tags: 
+- java
+published: true
+comments: 
+---
+<p>
+从jdk1.7开始，jdk提供了ForkJoin相关工具类。
+与其他ExecutorService实现相比，其能够充分地利用多核优势来提高执行性能:
+</p>
+<ol class="org-ol">
+<li>通过采用工作窃取算法，使得未被分配任务的工作线程也能从忙碌线程那窃取任务协助执行。</li>
+<li>抽象ForkJoinTask提供了模板方法，以更好地支持将大任务拆分成小任务的分而治冶思想。</li>
+</ol>
+
+<p>
+本文基于jdk13的代码，来探讨下ForkJoin框架对于任务何时窃取，以及怎么窃取的问题。
+</p>
+
+<div id="outline-container-orge49b0c0" class="outline-2">
+<h2 id="orge49b0c0">WorkQueue</h2>
+<div class="outline-text-2" id="text-orge49b0c0">
+<p>
+ForkJoinPool中的WorkQueue被声明为数组形式，其通过区分外部提交和任务执行过程中产生的任务，
+优先执行提交任务所产生的子任务，从而优先完成已经开始执行的提交任务。
+该数组根据任务的来源区分为:
+</p>
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">数组下标</td>
+<td class="org-left">任务来源</td>
+<td class="org-left">是否有绑定执行线程</td>
+<td class="org-left">被窃取方式</td>
+</tr>
+
+<tr>
+<td class="org-left">奇数</td>
+<td class="org-left">ForkJoinTask产生的子任务</td>
+<td class="org-left">绑定ForkJoinWorkerThread</td>
+<td class="org-left">1.runWorker中的scan方法，2.awaitJoin方法窃取的队列任务</td>
+</tr>
+
+<tr>
+<td class="org-left">偶数</td>
+<td class="org-left">外部提交(非ForkJoinWorkerThread)</td>
+<td class="org-left">否</td>
+<td class="org-left">1.runWorker中的scan方法</td>
+</tr>
+</tbody>
+</table>
+
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #ce537a; font-weight: bold;">WorkQueue</span><span style="color: #4f97d7;">[]</span> <span style="color: #7590db;">workQueues</span>;              <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">main registry</span>
+</pre>
+</div>
+
+<p>
+从上面的表格可以看出，窃取分为工作线程主循环中的例程性窃取和join阻塞时辅助性窃取。
+</p>
+</div>
+</div>
+
+<div id="outline-container-org89d01c3" class="outline-2">
+<h2 id="org89d01c3">主循环中的例程性窃取</h2>
+<div class="outline-text-2" id="text-org89d01c3">
+<p>
+例程性的工作窃取是发生在工作线程主循环中调用链:forkJoinWorkerThread.run() -&gt; pool.runWorker(workQueue) -&gt; scan(workQueue, r)中的scan方法。
+其保证了优先完成已开始执行的ForkJoin任务，并且外部提交的任务在任务较多时不发生饥饿现象。
+</p>
+
+<p>
+通过scan方法可以看出，其根据调用方runWorker方法所传入的随机数r开始，查找非空的窃取队列。
+找到后即调用当前forkJoinWorkerThread对应WorkQueue的topLevelExec，开始常规性运行过程。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #bc6ec5; font-weight: bold;">scan</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">w</span>, <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">r</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">WorkQueue</span><span style="color: #bc6ec5;">[]</span> <span style="color: #7590db;">ws</span>; <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">n</span>;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">(</span>ws = workQueues<span style="color: #2d9574;">)</span> != <span style="color: #a45bad;">null</span> &amp;&amp; <span style="color: #2d9574;">(</span>n = ws.length<span style="color: #2d9574;">)</span> &gt; <span style="color: #a45bad;">0</span> &amp;&amp; w != <span style="color: #a45bad;">null</span><span style="color: #bc6ec5;">)</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #4f97d7; font-weight: bold;">for</span> <span style="color: #2d9574;">(</span><span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">m</span> = n - <span style="color: #a45bad;">1</span>, <span style="color: #7590db;">j</span> = r &amp; m;;<span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">q</span>; <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">b</span>;
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span><span style="color: #b1951d;">(</span>q = ws<span style="color: #4f97d7;">[</span>j<span style="color: #4f97d7;">]</span><span style="color: #b1951d;">)</span> != <span style="color: #a45bad;">null</span> &amp;&amp; q.top != <span style="color: #b1951d;">(</span>b = q.base<span style="color: #b1951d;">)</span><span style="color: #67b11d;">)</span> <span style="color: #67b11d;">{</span>
+                <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">qid</span> = q.id;
+                <span style="color: #ce537a; font-weight: bold;">ForkJoinTask</span><span style="color: #b1951d;">&lt;</span>?<span style="color: #b1951d;">&gt;[]</span> <span style="color: #7590db;">a</span>; <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">cap</span>, <span style="color: #7590db;">k</span>; <span style="color: #ce537a; font-weight: bold;">ForkJoinTask</span><span style="color: #b1951d;">&lt;</span>?<span style="color: #b1951d;">&gt;</span> <span style="color: #7590db;">t</span>;
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span><span style="color: #4f97d7;">(</span>a = q.array<span style="color: #4f97d7;">)</span> != <span style="color: #a45bad;">null</span> &amp;&amp; <span style="color: #4f97d7;">(</span>cap = a.length<span style="color: #4f97d7;">)</span> &gt; <span style="color: #a45bad;">0</span><span style="color: #b1951d;">)</span> <span style="color: #b1951d;">{</span>
+                    t = <span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">ForkJoinTask</span><span style="color: #bc6ec5;">&lt;</span>?<span style="color: #bc6ec5;">&gt;</span><span style="color: #4f97d7;">)</span>QA.getAcquire<span style="color: #4f97d7;">(</span>a, k = <span style="color: #bc6ec5;">(</span>cap - <span style="color: #a45bad;">1</span><span style="color: #bc6ec5;">)</span> &amp; b<span style="color: #4f97d7;">)</span>;
+                    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #4f97d7;">(</span>q.base == b++ &amp;&amp; t != <span style="color: #a45bad;">null</span> &amp;&amp;
+                        QA.compareAndSet<span style="color: #bc6ec5;">(</span>a, k, t, <span style="color: #a45bad;">null</span><span style="color: #bc6ec5;">)</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+                        q.base = b;
+                        w.source = qid;
+                        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>a<span style="color: #2d9574;">[</span><span style="color: #9cb6ad;">(</span>cap - <span style="color: #a45bad;">1</span><span style="color: #9cb6ad;">)</span> &amp; b<span style="color: #2d9574;">]</span> != <span style="color: #a45bad;">null</span><span style="color: #bc6ec5;">)</span>
+                            signalWork<span style="color: #bc6ec5;">(</span>q<span style="color: #bc6ec5;">)</span>;    <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">help signal if more tasks</span>
+                        w.topLevelExec<span style="color: #bc6ec5;">(</span>t, q,  <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">random fairness bound</span>
+                                       <span style="color: #2d9574;">(</span>r | <span style="color: #9cb6ad;">(</span><span style="color: #a45bad;">1</span> &lt;&lt; TOP_BOUND_SHIFT<span style="color: #9cb6ad;">)</span><span style="color: #2d9574;">)</span> &amp; SMASK<span style="color: #bc6ec5;">)</span>;
+                    <span style="color: #4f97d7;">}</span>
+                <span style="color: #b1951d;">}</span>
+                <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #a45bad;">true</span>;
+            <span style="color: #67b11d;">}</span>
+            <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>--n &gt; <span style="color: #a45bad;">0</span><span style="color: #67b11d;">)</span>
+                j = <span style="color: #67b11d;">(</span>j + <span style="color: #a45bad;">1</span><span style="color: #67b11d;">)</span> &amp; m;
+            <span style="color: #4f97d7; font-weight: bold;">else</span>
+                <span style="color: #4f97d7; font-weight: bold;">break</span>;
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span>
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #a45bad;">false</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+
+<p>
+topLevelExec方法是执行本地队列任务及窃取任务的主要方法，窃取任务从指定窃取队列以FIFO的顺序取出;
+而本地队列FIFO还是LIFO，则由构造器方法中的asyncMode决定（默认为false，也就是LIFO）。
+</p>
+
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">public</span> <span style="color: #bc6ec5; font-weight: bold;">ForkJoinPool</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">parallelism</span>,
+                    <span style="color: #ce537a; font-weight: bold;">ForkJoinWorkerThreadFactory</span> <span style="color: #7590db;">factory</span>,
+                    <span style="color: #ce537a; font-weight: bold;">UncaughtExceptionHandler</span> <span style="color: #7590db;">handler</span>,
+                    <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #7590db;">asyncMode</span><span style="color: #4f97d7;">)</span>
+
+mode = parallelism | <span style="color: #4f97d7;">(</span>asyncMode ? FIFO : <span style="color: #a45bad;">0</span><span style="color: #4f97d7;">)</span>;
+</pre>
+</div>
+
+<p>
+考虑到调用该方法时，本地队列中必定是不存在任务的，因此该次调用中直接执行窃取队列首部的ForkJoinTask。
+之后每执行n次(&gt;= 2^10)本地队列任务，尝试执行一次窃取队列任务。
+当本地及窃取队列均没有待执行任务时，返回到runWork方法，调整窃取的随机数r后，继续调用scan方法寻找合适的窃取队列。
+</p>
+
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">void</span> <span style="color: #bc6ec5; font-weight: bold;">topLevelExec</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">ForkJoinTask</span><span style="color: #bc6ec5;">&lt;</span>?<span style="color: #bc6ec5;">&gt;</span> <span style="color: #7590db;">t</span>, <span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">q</span>, <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">n</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">nstolen</span> = <span style="color: #a45bad;">1</span>;
+    <span style="color: #4f97d7; font-weight: bold;">for</span> <span style="color: #bc6ec5;">(</span><span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">j</span> = <span style="color: #a45bad;">0</span>;;<span style="color: #bc6ec5;">)</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>t != <span style="color: #a45bad;">null</span><span style="color: #2d9574;">)</span>
+            t.doExec<span style="color: #2d9574;">()</span>;
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>j++ &lt;= n<span style="color: #2d9574;">)</span>
+            t = nextLocalTask<span style="color: #2d9574;">()</span>;
+        <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #2d9574;">{</span>
+            j = <span style="color: #a45bad;">0</span>;
+            t = <span style="color: #a45bad;">null</span>;
+        <span style="color: #2d9574;">}</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #2d9574;">(</span>t == <span style="color: #a45bad;">null</span><span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>q != <span style="color: #a45bad;">null</span> &amp;&amp; <span style="color: #b1951d;">(</span>t = q.poll<span style="color: #4f97d7;">()</span><span style="color: #b1951d;">)</span> != <span style="color: #a45bad;">null</span><span style="color: #67b11d;">)</span> <span style="color: #67b11d;">{</span>
+                ++nstolen;
+                j = <span style="color: #a45bad;">0</span>;
+            <span style="color: #67b11d;">}</span>
+            <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>j != <span style="color: #a45bad;">0</span><span style="color: #67b11d;">)</span>
+                <span style="color: #4f97d7; font-weight: bold;">break</span>;
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span>
+    <span style="color: #ce537a; font-weight: bold;">ForkJoinWorkerThread</span> <span style="color: #7590db;">thread</span> = owner;
+    nsteals += nstolen;
+    source = <span style="color: #a45bad;">0</span>;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>thread != <span style="color: #a45bad;">null</span><span style="color: #bc6ec5;">)</span>
+        thread.afterTopLevelExec<span style="color: #bc6ec5;">()</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgd5a8d90" class="outline-2">
+<h2 id="orgd5a8d90">join阻塞时的窃取</h2>
+<div class="outline-text-2" id="text-orgd5a8d90">
+<p>
+forkjoin任务的join操作主要是通过调用doJoin方法来完成的。
+在该方法中，可以看到其根据当前线程是否是forkjoin工作线程(ForkJoinWorkerThread)分别采取两种不同的策略。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #bc6ec5; font-weight: bold;">doJoin</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span>; <span style="color: #ce537a; font-weight: bold;">Thread</span> <span style="color: #7590db;">t</span>; <span style="color: #ce537a; font-weight: bold;">ForkJoinWorkerThread</span> <span style="color: #7590db;">wt</span>; <span style="color: #a45bad;">ForkJoinPool</span>.<span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">w</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #bc6ec5;">(</span>s = status<span style="color: #bc6ec5;">)</span> &lt; <span style="color: #a45bad;">0</span> ? s :
+        <span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">(</span>t = Thread.currentThread<span style="color: #67b11d;">()</span><span style="color: #2d9574;">)</span> <span style="color: #4f97d7; font-weight: bold;">instanceof</span> ForkJoinWorkerThread<span style="color: #bc6ec5;">)</span> ?
+        <span style="color: #bc6ec5;">(</span>w = <span style="color: #2d9574;">(</span>wt = <span style="color: #67b11d;">(</span><span style="color: #ce537a; font-weight: bold;">ForkJoinWorkerThread</span><span style="color: #67b11d;">)</span>t<span style="color: #2d9574;">)</span>.workQueue<span style="color: #bc6ec5;">)</span>.
+        tryUnpush<span style="color: #bc6ec5;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span><span style="color: #bc6ec5;">)</span> &amp;&amp; <span style="color: #bc6ec5;">(</span>s = doExec<span style="color: #2d9574;">()</span><span style="color: #bc6ec5;">)</span> &lt; <span style="color: #a45bad;">0</span> ? s :
+        wt.pool.awaitJoin<span style="color: #bc6ec5;">(</span>w, <span style="color: #4f97d7; font-weight: bold;">this</span>, <span style="color: #a45bad;">0L</span><span style="color: #bc6ec5;">)</span> :
+        externalAwaitDone<span style="color: #bc6ec5;">()</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+<div id="outline-container-orga3d1f31" class="outline-3">
+<h3 id="orga3d1f31">非ForkJoinWorkerThread的Join</h3>
+<div class="outline-text-3" id="text-orga3d1f31">
+<p>
+对于非ForkJoinWorkerThread的外部线程来说，其不会窃取执行其他任务。
+只会在阻塞等待任务前，调用tryExternalHelp方法，尝试当前线程直接执行提交任务。
+是否能直接执行提交任务，取决于是否能够满足下面三个条件。
+值得注意的是，外部线程执行过程中产生的子任务将提交到common池(ForkJoinPool.common)中。
+</p>
+<ol class="org-ol">
+<li>任务提交在common池中</li>
+<li>任务提交时的线程Probe值和当前的指向同一个提交队列</li>
+<li>任务位于队列尾部</li>
+</ol>
+
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #bc6ec5; font-weight: bold;">tryExternalHelp</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">(</span>s = status<span style="color: #2d9574;">)</span> &lt; <span style="color: #a45bad;">0</span> ? s:
+            <span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span> <span style="color: #4f97d7; font-weight: bold;">instanceof</span> CountedCompleter<span style="color: #2d9574;">)</span> ?
+            ForkJoinPool.common.externalHelpComplete<span style="color: #2d9574;">(</span>
+                <span style="color: #67b11d;">(</span><span style="color: #ce537a; font-weight: bold;">CountedCompleter</span><span style="color: #b1951d;">&lt;</span>?<span style="color: #b1951d;">&gt;</span><span style="color: #67b11d;">)</span><span style="color: #4f97d7; font-weight: bold;">this</span>, <span style="color: #a45bad;">0</span><span style="color: #2d9574;">)</span> :
+            ForkJoinPool.common.tryExternalUnpush<span style="color: #2d9574;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span><span style="color: #2d9574;">)</span> ?
+            doExec<span style="color: #2d9574;">()</span> : <span style="color: #a45bad;">0</span><span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+
+<span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">boolean</span> <span style="color: #bc6ec5; font-weight: bold;">tryExternalUnpush</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">ForkJoinTask</span><span style="color: #bc6ec5;">&lt;</span>?<span style="color: #bc6ec5;">&gt;</span> <span style="color: #7590db;">task</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">r</span> = ThreadLocalRandom.getProbe<span style="color: #bc6ec5;">()</span>;
+    <span style="color: #ce537a; font-weight: bold;">WorkQueue</span><span style="color: #bc6ec5;">[]</span> <span style="color: #7590db;">ws</span>; <span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">w</span>; <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">n</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">(</span>ws = workQueues<span style="color: #2d9574;">)</span> != <span style="color: #a45bad;">null</span> &amp;&amp;
+            <span style="color: #2d9574;">(</span>n = ws.length<span style="color: #2d9574;">)</span> &gt; <span style="color: #a45bad;">0</span> &amp;&amp;
+            <span style="color: #2d9574;">(</span>w = ws<span style="color: #67b11d;">[</span><span style="color: #b1951d;">(</span>n - <span style="color: #a45bad;">1</span><span style="color: #b1951d;">)</span> &amp; r &amp; SQMASK<span style="color: #67b11d;">]</span><span style="color: #2d9574;">)</span> != <span style="color: #a45bad;">null</span> &amp;&amp;
+            w.tryLockedUnpush<span style="color: #2d9574;">(</span>task<span style="color: #2d9574;">)</span><span style="color: #bc6ec5;">)</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org96a8307" class="outline-3">
+<h3 id="org96a8307">ForkJoinWorkerThread的Join</h3>
+<div class="outline-text-3" id="text-org96a8307">
+<p>
+对于forkjoin工作线程来说，当等待join的任务位于当前线程的工作队列尾部时，尝试直接执行当前任务。
+否则调用forkJoinWorkerThread.pool.awaitJoin方法。
+</p>
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">private</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #bc6ec5; font-weight: bold;">doJoin</span><span style="color: #4f97d7;">()</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span>; <span style="color: #ce537a; font-weight: bold;">Thread</span> <span style="color: #7590db;">t</span>; <span style="color: #ce537a; font-weight: bold;">ForkJoinWorkerThread</span> <span style="color: #7590db;">wt</span>; <span style="color: #a45bad;">ForkJoinPool</span>.<span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">w</span>;
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #bc6ec5;">(</span>s = status<span style="color: #bc6ec5;">)</span> &lt; <span style="color: #a45bad;">0</span> ? s :
+        <span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">(</span>t = Thread.currentThread<span style="color: #67b11d;">()</span><span style="color: #2d9574;">)</span> <span style="color: #4f97d7; font-weight: bold;">instanceof</span> ForkJoinWorkerThread<span style="color: #bc6ec5;">)</span> ?
+        <span style="color: #bc6ec5;">(</span>w = <span style="color: #2d9574;">(</span>wt = <span style="color: #67b11d;">(</span><span style="color: #ce537a; font-weight: bold;">ForkJoinWorkerThread</span><span style="color: #67b11d;">)</span>t<span style="color: #2d9574;">)</span>.workQueue<span style="color: #bc6ec5;">)</span>.
+        tryUnpush<span style="color: #bc6ec5;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span><span style="color: #bc6ec5;">)</span> &amp;&amp; <span style="color: #bc6ec5;">(</span>s = doExec<span style="color: #2d9574;">()</span><span style="color: #bc6ec5;">)</span> &lt; <span style="color: #a45bad;">0</span> ? s :
+        wt.pool.awaitJoin<span style="color: #bc6ec5;">(</span>w, <span style="color: #4f97d7; font-weight: bold;">this</span>, <span style="color: #a45bad;">0L</span><span style="color: #bc6ec5;">)</span> :
+        externalAwaitDone<span style="color: #bc6ec5;">()</span>;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+
+<p>
+在awaitJoin方法中，其首先通过tryRemoveAndExec方法，在w(本地工作队列)中查找并执行等待join的任务。
+如果依旧是未完成状态，其将进行如下的窃取循环:
+</p>
+<ol class="org-ol">
+<li>在子任务工作队列(奇数索引)中窃取队列头部的task执行。</li>
+<li>任务完成则退出。</li>
+<li>当子任务工作队列均为空队列，且tryCompensate方法返回值非0，则阻塞至deadline，否则重新进行窃取循环。</li>
+</ol>
+
+<p>
+tryCompensate方法在没有足够的工作线程时，会创建或激活一个空闲线程来补偿join线程阻塞导致的并行度不足。
+该方法返回0表示需要重试，其仅在工作队列状态不一致或cas更新状态失败时出现。
+</p>
+
+<div class="org-src-container">
+<pre class="src src-java"><span style="color: #4f97d7; font-weight: bold;">final</span> <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #bc6ec5; font-weight: bold;">awaitJoin</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">w</span>, <span style="color: #ce537a; font-weight: bold;">ForkJoinTask</span><span style="color: #bc6ec5;">&lt;</span>?<span style="color: #bc6ec5;">&gt;</span> <span style="color: #7590db;">task</span>, <span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">deadline</span><span style="color: #4f97d7;">)</span> <span style="color: #4f97d7;">{</span>
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">s</span> = <span style="color: #a45bad;">0</span>;
+    <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">seed</span> = ThreadLocalRandom.nextSecondarySeed<span style="color: #bc6ec5;">()</span>;
+    <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #bc6ec5;">(</span>w != <span style="color: #a45bad;">null</span> &amp;&amp; task != <span style="color: #a45bad;">null</span> &amp;&amp;
+        <span style="color: #2d9574;">(</span><span style="color: #a45bad;">!</span><span style="color: #67b11d;">(</span>task <span style="color: #4f97d7; font-weight: bold;">instanceof</span> CountedCompleter<span style="color: #67b11d;">)</span> ||
+         <span style="color: #67b11d;">(</span>s = w.helpCC<span style="color: #b1951d;">(</span><span style="color: #4f97d7;">(</span><span style="color: #ce537a; font-weight: bold;">CountedCompleter</span><span style="color: #bc6ec5;">&lt;</span>?<span style="color: #bc6ec5;">&gt;</span><span style="color: #4f97d7;">)</span>task, <span style="color: #a45bad;">0</span>, <span style="color: #a45bad;">false</span><span style="color: #b1951d;">)</span><span style="color: #67b11d;">)</span> &gt;= <span style="color: #a45bad;">0</span><span style="color: #2d9574;">)</span><span style="color: #bc6ec5;">)</span> <span style="color: #bc6ec5;">{</span>
+        w.tryRemoveAndExec<span style="color: #2d9574;">(</span>task<span style="color: #2d9574;">)</span>;
+        <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">src</span> = w.source, <span style="color: #7590db;">id</span> = w.id;
+        <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">r</span> = <span style="color: #2d9574;">(</span>seed &gt;&gt;&gt; <span style="color: #a45bad;">16</span><span style="color: #2d9574;">)</span> | <span style="color: #a45bad;">1</span>, <span style="color: #7590db;">step</span> = <span style="color: #2d9574;">(</span>seed &amp; ~<span style="color: #a45bad;">1</span><span style="color: #2d9574;">)</span> | <span style="color: #a45bad;">2</span>;
+        s = task.status;
+        <span style="color: #4f97d7; font-weight: bold;">while</span> <span style="color: #2d9574;">(</span>s &gt;= <span style="color: #a45bad;">0</span><span style="color: #2d9574;">)</span> <span style="color: #2d9574;">{</span>
+            <span style="color: #ce537a; font-weight: bold;">WorkQueue</span><span style="color: #67b11d;">[]</span> <span style="color: #7590db;">ws</span>;
+            <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">n</span> = <span style="color: #67b11d;">(</span>ws = workQueues<span style="color: #67b11d;">)</span> == <span style="color: #a45bad;">null</span> ? <span style="color: #a45bad;">0</span> : ws.length, <span style="color: #7590db;">m</span> = n - <span style="color: #a45bad;">1</span>;
+            <span style="color: #4f97d7; font-weight: bold;">while</span> <span style="color: #67b11d;">(</span>n &gt; <span style="color: #a45bad;">0</span><span style="color: #67b11d;">)</span> <span style="color: #67b11d;">{</span>
+                <span style="color: #ce537a; font-weight: bold;">WorkQueue</span> <span style="color: #7590db;">q</span>; <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">b</span>;
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span><span style="color: #4f97d7;">(</span>q = ws<span style="color: #bc6ec5;">[</span>r &amp; m<span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span> != <span style="color: #a45bad;">null</span> &amp;&amp; q.source == id &amp;&amp;
+                    q.top != <span style="color: #4f97d7;">(</span>b = q.base<span style="color: #4f97d7;">)</span><span style="color: #b1951d;">)</span> <span style="color: #b1951d;">{</span>
+                     <span style="color: #2aa1ae; background-color: #292e34;">/* </span><span style="color: #2aa1ae; background-color: #292e34;">&#25191;&#34892;&#38431;&#21015;&#22836;&#37096;&#20219;&#21153; */</span>
+                    <span style="color: #4f97d7; font-weight: bold;">break</span>;
+                <span style="color: #b1951d;">}</span>
+                <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #b1951d;">{</span>
+                    r += step;
+                    --n;
+                <span style="color: #b1951d;">}</span>
+            <span style="color: #67b11d;">}</span>
+            <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span><span style="color: #b1951d;">(</span>s = task.status<span style="color: #b1951d;">)</span> &lt; <span style="color: #a45bad;">0</span><span style="color: #67b11d;">)</span>
+                <span style="color: #4f97d7; font-weight: bold;">break</span>;
+            <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #67b11d;">(</span>n == <span style="color: #a45bad;">0</span><span style="color: #67b11d;">)</span> <span style="color: #67b11d;">{</span> <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">empty scan</span>
+                <span style="color: #ce537a; font-weight: bold;">long</span> <span style="color: #7590db;">ms</span>, <span style="color: #7590db;">ns</span>; <span style="color: #ce537a; font-weight: bold;">int</span> <span style="color: #7590db;">block</span>;
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span><span style="color: #4f97d7;">(</span>ns = deadline - System.nanoTime<span style="color: #bc6ec5;">()</span><span style="color: #4f97d7;">)</span> &lt;= <span style="color: #a45bad;">0L</span><span style="color: #b1951d;">)</span>
+                    <span style="color: #4f97d7; font-weight: bold;">break</span>;                         <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">timeout</span>
+                <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span><span style="color: #4f97d7;">(</span>ms = <span style="color: #a45bad;">TimeUnit</span>.NANOSECONDS.toMillis<span style="color: #bc6ec5;">(</span>ns<span style="color: #bc6ec5;">)</span><span style="color: #4f97d7;">)</span> &lt;= <span style="color: #a45bad;">0L</span><span style="color: #b1951d;">)</span>
+                    ms = <span style="color: #a45bad;">1L</span>;                       <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">avoid 0 for timed wait</span>
+                <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #b1951d;">(</span><span style="color: #4f97d7;">(</span>block = tryCompensate<span style="color: #bc6ec5;">(</span>w<span style="color: #bc6ec5;">)</span><span style="color: #4f97d7;">)</span> != <span style="color: #a45bad;">0</span><span style="color: #b1951d;">)</span> <span style="color: #b1951d;">{</span>
+                    task.internalWait<span style="color: #4f97d7;">(</span>ms<span style="color: #4f97d7;">)</span>;
+                    CTL.getAndAdd<span style="color: #4f97d7;">(</span><span style="color: #4f97d7; font-weight: bold;">this</span>, <span style="color: #bc6ec5;">(</span>block &gt; <span style="color: #a45bad;">0</span><span style="color: #bc6ec5;">)</span> ? RC_UNIT : <span style="color: #a45bad;">0L</span><span style="color: #4f97d7;">)</span>;
+                <span style="color: #b1951d;">}</span>
+                s = task.status;
+            <span style="color: #67b11d;">}</span>
+        <span style="color: #2d9574;">}</span>
+    <span style="color: #bc6ec5;">}</span>
+    <span style="color: #4f97d7; font-weight: bold;">return</span> s;
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+</div>
+</div>
+</div>
