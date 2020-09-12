@@ -1,0 +1,97 @@
+---
+title: "算法技巧-寻找递增序列长度"
+date: 2020-09-11
+layout: post
+categories: 
+- 编程技巧
+tags: 
+- 编程技巧 
+- 算法
+published: true
+comments: 
+---
+
+<div id="outline-container-org1054734" class="outline-2">
+<h2 id="org1054734">最长上升子序列问题</h2>
+<div class="outline-text-2" id="text-org1054734">
+<p>
+leetcode 300
+</p>
+<pre class="example">
+给定一个无序的整数数组，找到其中最长上升子序列的长度。
+</pre>
+
+<p>
+比较容易想到的解法是构造长度为n的数组，其第i位表示:第i个数字为最长子序列最后一位时的长度。
+该解法即动态规划，其迭代式为: v[j] = max(v[j], v[i]+1), j &gt; i &gt;= 0。该算法的时间复杂度为O(n^2)。
+</p>
+<div class="org-src-container">
+<pre class="src src-python"><span style="color: #4f97d7; font-weight: bold;">def</span> <span style="color: #bc6ec5; font-weight: bold;">lengthOfLIS</span><span style="color: #4f97d7;">(</span>nums: List<span style="color: #bc6ec5;">[</span><span style="color: #4f97d7;">int</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span> -&gt; <span style="color: #4f97d7;">int</span>:
+    <span style="color: #7590db;">size</span> = <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>nums<span style="color: #4f97d7;">)</span>
+    <span style="color: #7590db;">ans</span> = <span style="color: #4f97d7;">[</span><span style="color: #a45bad;">1</span><span style="color: #4f97d7;">]</span> * size
+    <span style="color: #4f97d7; font-weight: bold;">for</span> i <span style="color: #4f97d7; font-weight: bold;">in</span> <span style="color: #4f97d7;">range</span><span style="color: #4f97d7;">(</span>size<span style="color: #4f97d7;">)</span>:
+        <span style="color: #7590db;">cur_val</span> = nums<span style="color: #4f97d7;">[</span>i<span style="color: #4f97d7;">]</span>
+        <span style="color: #4f97d7; font-weight: bold;">for</span> j <span style="color: #4f97d7; font-weight: bold;">in</span> <span style="color: #4f97d7;">range</span><span style="color: #4f97d7;">(</span><span style="color: #a45bad;">0</span>, i<span style="color: #4f97d7;">)</span>:
+            <span style="color: #4f97d7; font-weight: bold;">if</span> cur_val &gt; nums<span style="color: #4f97d7;">[</span>j<span style="color: #4f97d7;">]</span>:
+                <span style="color: #7590db;">ans</span><span style="color: #4f97d7;">[</span>i<span style="color: #4f97d7;">]</span> = <span style="color: #4f97d7;">max</span><span style="color: #4f97d7;">(</span>ans<span style="color: #bc6ec5;">[</span>i<span style="color: #bc6ec5;">]</span>, ans<span style="color: #bc6ec5;">[</span>j<span style="color: #bc6ec5;">]</span> + <span style="color: #a45bad;">1</span><span style="color: #4f97d7;">)</span>
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #a45bad;">0</span> <span style="color: #4f97d7; font-weight: bold;">if</span> <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>ans<span style="color: #4f97d7;">)</span> == <span style="color: #a45bad;">0</span> <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #4f97d7;">max</span><span style="color: #4f97d7;">(</span>ans<span style="color: #4f97d7;">)</span>
+</pre>
+</div>
+
+<p>
+对于结果队列，下标i表示长度为i的递增序列的最后一位，其数值为该位的最小值。
+通过二分法可以在O(log^n)的时间复杂度内完成替换，总时间复杂度为O(nlog^n)
+</p>
+<div class="org-src-container">
+<pre class="src src-python"><span style="color: #4f97d7; font-weight: bold;">import</span> bisect
+<span style="color: #4f97d7; font-weight: bold;">def</span> <span style="color: #bc6ec5; font-weight: bold;">lengthOfLIS</span><span style="color: #4f97d7;">(</span>nums: List<span style="color: #bc6ec5;">[</span><span style="color: #4f97d7;">int</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span> -&gt; <span style="color: #4f97d7;">int</span>:
+    <span style="color: #7590db;">size</span> = <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>nums<span style="color: #4f97d7;">)</span>
+    <span style="color: #7590db;">queue</span> = <span style="color: #4f97d7;">[]</span>
+    <span style="color: #4f97d7; font-weight: bold;">for</span> i <span style="color: #4f97d7; font-weight: bold;">in</span> <span style="color: #4f97d7;">range</span><span style="color: #4f97d7;">(</span>size<span style="color: #4f97d7;">)</span>:
+        <span style="color: #7590db;">cur_val</span> = nums<span style="color: #4f97d7;">[</span>i<span style="color: #4f97d7;">]</span>
+        <span style="color: #7590db;">index</span> = bisect.bisect_left<span style="color: #4f97d7;">(</span>queue, cur_val<span style="color: #4f97d7;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> index == <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>ans<span style="color: #4f97d7;">)</span>:
+            queue.append<span style="color: #4f97d7;">(</span>cur_val<span style="color: #4f97d7;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">else</span>:
+            <span style="color: #7590db;">queue</span><span style="color: #4f97d7;">[</span>index<span style="color: #4f97d7;">]</span> = cur_val
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>queue<span style="color: #4f97d7;">)</span>
+</pre>
+</div>
+
+<p>
+利用同样的思路可以解决二维的递增序列问题。
+</p>
+</div>
+</div>
+
+<div id="outline-container-org9629a3b" class="outline-2">
+<h2 id="org9629a3b">马戏团人塔问题</h2>
+<div class="outline-text-2" id="text-org9629a3b">
+<pre class="example">
+有个马戏团正在设计叠罗汉的表演节目，一个人要站在另一人的肩膀上。
+出于实际和美观的考虑，在上面的人要比下面的人矮一点且轻一点。
+已知马戏团每个人的身高和体重，请编写代码计算叠罗汉最多能叠几个人。
+</pre>
+
+<p>
+将需要迭罗汉的人员按序排列(1.身高升序2.体重降序)后，值为体重，即转化为之前的最长递增子序列问题。
+由于身高相同的人，不能迭罗汉，而只能选取一个，最矮的最优，所以要对其降序排列。
+此时对于结果队列，下标i表示自上而下的i层人塔的最底层的体重最小值。
+</p>
+<div class="org-src-container">
+<pre class="src src-python"><span style="color: #4f97d7; font-weight: bold;">import</span> bisect
+<span style="color: #4f97d7; font-weight: bold;">def</span> <span style="color: #bc6ec5; font-weight: bold;">bestSeqAtIndex</span><span style="color: #4f97d7;">(</span>height: List<span style="color: #bc6ec5;">[</span><span style="color: #4f97d7;">int</span><span style="color: #bc6ec5;">]</span>, weight: List<span style="color: #bc6ec5;">[</span><span style="color: #4f97d7;">int</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span> -&gt; <span style="color: #4f97d7;">int</span>:
+    <span style="color: #7590db;">ans</span>, <span style="color: #7590db;">size</span> = <span style="color: #a45bad;">0</span>, <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>height<span style="color: #4f97d7;">)</span>
+    <span style="color: #7590db;">sortedArr</span> = <span style="color: #4f97d7;">sorted</span><span style="color: #4f97d7;">(</span><span style="color: #bc6ec5;">[</span><span style="color: #2d9574;">(</span>height<span style="color: #67b11d;">[</span>i<span style="color: #67b11d;">]</span>, weight<span style="color: #67b11d;">[</span>i<span style="color: #67b11d;">]</span><span style="color: #2d9574;">)</span> <span style="color: #4f97d7; font-weight: bold;">for</span> i <span style="color: #4f97d7; font-weight: bold;">in</span> <span style="color: #4f97d7;">range</span><span style="color: #2d9574;">(</span>size<span style="color: #2d9574;">)</span><span style="color: #bc6ec5;">]</span>, key = <span style="color: #4f97d7; font-weight: bold;">lambda</span> pair: <span style="color: #bc6ec5;">(</span>pair<span style="color: #2d9574;">[</span><span style="color: #a45bad;">0</span><span style="color: #2d9574;">]</span>, -pair<span style="color: #2d9574;">[</span><span style="color: #a45bad;">1</span><span style="color: #2d9574;">]</span>  <span style="color: #bc6ec5;">)</span><span style="color: #4f97d7;">)</span>
+    <span style="color: #7590db;">queue</span> = <span style="color: #4f97d7;">[]</span>
+    <span style="color: #4f97d7; font-weight: bold;">for</span> item <span style="color: #4f97d7; font-weight: bold;">in</span> sortedArr:
+        <span style="color: #7590db;">index</span> = bisect.bisect_left<span style="color: #4f97d7;">(</span>queue, item<span style="color: #bc6ec5;">[</span><span style="color: #a45bad;">1</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">if</span> index == <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>queue<span style="color: #4f97d7;">)</span>:
+            queue.append<span style="color: #4f97d7;">(</span>item<span style="color: #bc6ec5;">[</span><span style="color: #a45bad;">1</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span>
+        <span style="color: #4f97d7; font-weight: bold;">else</span>:
+            <span style="color: #7590db;">queue</span><span style="color: #4f97d7;">[</span>index<span style="color: #4f97d7;">]</span> = item<span style="color: #4f97d7;">[</span><span style="color: #a45bad;">1</span><span style="color: #4f97d7;">]</span>
+    <span style="color: #4f97d7; font-weight: bold;">return</span> <span style="color: #4f97d7;">len</span><span style="color: #4f97d7;">(</span>queue<span style="color: #4f97d7;">)</span>
+</pre>
+</div>
+</div>
+</div>
